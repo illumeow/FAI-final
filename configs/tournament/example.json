@@ -1,6 +1,9 @@
 {
     "players": [
-        ["src.players.TA.random_player", "RandomPlayer"]
+        ["src.players.TA.random_player", "RandomPlayer", {}, "1"],
+        ["src.players.TA.random_player", "RandomPlayer", {}, "2"],
+        ["src.players.TA.random_player", "RandomPlayer", {}, "3"],
+        ["src.players.TA.random_player", "RandomPlayer", {}, "4"]
     ],
     "engine": {
         "n_players": 4,
