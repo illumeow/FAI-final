@@ -21,6 +21,17 @@ python run_tournament.py --config configs/tournament/example.json
 ```
 *Optional config overrides*: You can mix-and-match configurations via the command line using `--player-cfg`, `--engine-cfg`, or `--tournament-cfg`.
 
+### New Simple Agent Examples
+Two example players are provided under `src/players/simple_agents/`:
+* `HeuristicPlayer`: rule-based placement with simple risk-aware tie breaking.
+* `SimulationPlayer`: one-step Monte Carlo evaluation against sampled opponent cards.
+
+Try them with:
+```bash
+python run_single_game.py --config configs/game/simple_agents.json
+python run_tournament.py --config configs/tournament/simple_agents_smoke.json
+```
+
 ## Config File Structure
 
 Configuration files are structured as JSON objects with three main sections:

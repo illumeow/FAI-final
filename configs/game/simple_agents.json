@@ -1,0 +1,16 @@
+{
+    "players": [
+        ["src.players.simple_agents.heuristic_player", "HeuristicPlayer", {}, "heuristic"],
+        ["src.players.simple_agents.simulation_player", "SimulationPlayer", {"simulations": 96}, "simulation"],
+        ["src.players.TA.random_player", "RandomPlayer", {}, "random_a"],
+        ["src.players.TA.random_player", "RandomPlayer", {}, "random_b"]
+    ],
+    "engine": {
+        "n_players": 4,
+        "n_rounds": 10,
+        "verbose": true,
+        "timeout": 1.0,
+        "timeout_buffer": 0.5
+    },
+    "num_games": 1
+}
