@@ -1,7 +1,7 @@
 {
     "players": [
-        ["src.players.simple_agents.heuristic_player", "HeuristicPlayer", {}, "heuristic"],
-        ["src.players.simple_agents.simulation_player", "SimulationPlayer", {}, "simulation"],
+        ["src.players.agents.heuristic_player", "HeuristicPlayer", {}, "heuristic"],
+        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"],
         ["src.players.TA.random_player", "RandomPlayer", {}, "random_a"],
         ["src.players.TA.random_player", "RandomPlayer", {}, "random_b"]
     ],

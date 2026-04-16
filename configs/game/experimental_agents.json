@@ -1,9 +1,9 @@
 {
     "players": [
-        ["src.players.simple_agents.cfr_player", "CFRPlayer", {}, "cfr"],
-        ["src.players.simple_agents.expectimax_player", "ExpectimaxPlayer", {}, "expectimax"],
-        ["src.players.simple_agents.bitwise_search_player", "BitwiseSearchPlayer", {}, "bitwise"],
-        ["src.players.simple_agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"]
+        ["src.players.agents.cfr_player", "CFRPlayer", {}, "cfr"],
+        ["src.players.agents.expectimax_player", "ExpectimaxPlayer", {}, "expectimax"],
+        ["src.players.agents.bitwise_search_player", "BitwiseSearchPlayer", {}, "bitwise"],
+        ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"]
     ],
     "engine": {
         "n_players": 4,

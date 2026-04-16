@@ -21,37 +21,6 @@ python run_tournament.py --config configs/tournament/example.json
 ```
 *Optional config overrides*: You can mix-and-match configurations via the command line using `--player-cfg`, `--engine-cfg`, or `--tournament-cfg`.
 
-### New Simple Agent Examples
-Two example players are provided under `src/players/simple_agents/`:
-* `HeuristicPlayer`: expected-risk heuristic with probabilistic opponent modeling plus greedy lookahead.
-* `SimulationPlayer`: time-budgeted Monte Carlo determinization with full-round rollouts.
-
-Try them with:
-```bash
-python run_single_game.py --config configs/game/simple_agents.json
-python run_tournament.py --config configs/tournament/simple_agents_smoke.json
-python run_tournament.py --config configs/tournament/simple_agents_benchmark.json
-```
-
-Both simple-agent configs keep `args` empty, so the agents run with built-in defaults and remain submission-friendly.
-
-### Experimental Search Agent Examples
-Additional experimental players are available under `src/players/simple_agents/`:
-* `CFRPlayer`: online regret-matching over sampled rollouts.
-* `ExpectimaxPlayer`: stochastic expectimax with sampled chance nodes.
-* `BitwiseSearchPlayer`: bitset-optimized risk estimation.
-* `BanditRolloutPlayer`: UCB bandit over rollout-evaluated actions.
-
-Try them with:
-```bash
-python run_single_game.py --config configs/game/experimental_agents.json
-python run_tournament.py --config configs/tournament/experimental_agents_smoke.json
-python run_tournament.py --config configs/tournament/experimental_agents_benchmark.json
-python run_tournament.py --config configs/tournament/experimental_agents_top4.json
-```
-
-These configs also keep all player `args` empty.
-
 ## Config File Structure
 
 Configuration files are structured as JSON objects with three main sections:
