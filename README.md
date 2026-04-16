@@ -23,8 +23,8 @@ python run_tournament.py --config configs/tournament/example.json
 
 ### New Simple Agent Examples
 Two example players are provided under `src/players/simple_agents/`:
-* `HeuristicPlayer`: rule-based placement with simple risk-aware tie breaking.
-* `SimulationPlayer`: one-step Monte Carlo evaluation against sampled opponent cards.
+* `HeuristicPlayer`: expected-risk heuristic with probabilistic opponent modeling plus greedy lookahead.
+* `SimulationPlayer`: time-budgeted Monte Carlo determinization with full-round rollouts.
 
 Try them with:
 ```bash
