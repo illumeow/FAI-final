@@ -1,12 +1,21 @@
+import time
 import random
 
 
 class SimulationPlayer:
-    def __init__(self, player_idx, simulations=96, n_cards=104, seed=None):
+    """
+    Time-budgeted Monte Carlo player.
+
+    It samples hidden opponent hands (determinization) and rolls out the
+    remaining round sequence with lightweight greedy policies.
+    """
+
+    def __init__(self, player_idx):
         self.player_idx = player_idx
-        self.simulations = int(simulations)
-        self.n_cards = int(n_cards)
-        self.rng = random.Random(seed if seed is not None else (9973 + player_idx))
+        self.n_cards = 104
+        self.rng = random.Random(40009 + player_idx)
+        self.time_budget_sec = 0.92
+        self.min_samples_per_card = 4
 
     def _card_score(self, card):
         if card % 55 == 0:
@@ -22,49 +31,59 @@ class SimulationPlayer:
     def _row_score(self, row):
         return sum(self._card_score(card) for card in row)
 
-    def _place_card(self, board, card):
-        fit_row = -1
-        fit_last = -1
+    def _best_fit_row(self, board, card):
+        best_idx = -1
+        best_last = -1
         for i, row in enumerate(board):
-            last_card = row[-1]
-            if last_card < card and last_card > fit_last:
-                fit_last = last_card
-                fit_row = i
+            last = row[-1]
+            if last < card and last > best_last:
+                best_last = last
+                best_idx = i
+        return best_idx, best_last
 
-        if fit_row != -1:
-            if len(board[fit_row]) >= 5:
-                incurred = self._row_score(board[fit_row])
-                board[fit_row] = [card]
-                return incurred
-            board[fit_row].append(card)
-            return 0
-
-        take_row = min(
+    def _forced_take_row(self, board):
+        return min(
             range(len(board)),
             key=lambda i: (self._row_score(board[i]), len(board[i]), i),
         )
-        incurred = self._row_score(board[take_row])
-        board[take_row] = [card]
+
+    def _place_card(self, board, card):
+        fit_idx, _ = self._best_fit_row(board, card)
+        if fit_idx != -1:
+            if len(board[fit_idx]) >= 5:
+                incurred = self._row_score(board[fit_idx])
+                board[fit_idx] = [card]
+                return incurred
+            board[fit_idx].append(card)
+            return 0
+
+        take_idx = self._forced_take_row(board)
+        incurred = self._row_score(board[take_idx])
+        board[take_idx] = [card]
         return incurred
 
-    def _heuristic_tiebreak(self, board, card):
-        fit_row = -1
-        fit_last = -1
-        for i, row in enumerate(board):
-            last_card = row[-1]
-            if last_card < card and last_card > fit_last:
-                fit_last = last_card
-                fit_row = i
+    def _heuristic_card_key(self, board, card):
+        fit_idx, fit_last = self._best_fit_row(board, card)
 
-        if fit_row == -1:
-            take_row = min(
-                range(len(board)),
-                key=lambda i: (self._row_score(board[i]), len(board[i]), i),
-            )
-            return (self._row_score(board[take_row]), 1, 10**6, card)
+        if fit_idx == -1:
+            take_idx = self._forced_take_row(board)
+            penalty = self._row_score(board[take_idx])
+            return (penalty, 1, 10**6, 1, card)
 
-        immediate = self._row_score(board[fit_row]) if len(board[fit_row]) >= 5 else 0
-        return (immediate, 0, card - fit_last, card)
+        delta = card - fit_last
+        row_len = len(board[fit_idx])
+        penalty = self._row_score(board[fit_idx]) if row_len >= 5 else 0
+        return (penalty, 0, delta, row_len + 1, card)
+
+    def _greedy_pick(self, hand, board):
+        best = hand[0]
+        best_key = self._heuristic_card_key(board, best)
+        for card in hand[1:]:
+            key = self._heuristic_card_key(board, card)
+            if key < best_key:
+                best_key = key
+                best = card
+        return best
 
     def _build_unseen_pool(self, hand, history):
         known = set(hand)
@@ -81,51 +100,121 @@ class SimulationPlayer:
 
         return [c for c in range(1, self.n_cards + 1) if c not in known]
 
+    def _sample_opponent_hands(self, unseen, n_opponents, rounds_left):
+        needed = n_opponents * rounds_left
+        if needed == 0:
+            return []
+
+        if len(unseen) >= needed:
+            sampled = self.rng.sample(unseen, needed)
+        elif unseen:
+            sampled = [self.rng.choice(unseen) for _ in range(needed)]
+        else:
+            sampled = [self.rng.randint(1, self.n_cards) for _ in range(needed)]
+
+        opp_hands = []
+        idx = 0
+        for _ in range(n_opponents):
+            h = sampled[idx: idx + rounds_left]
+            h.sort()
+            opp_hands.append(h)
+            idx += rounds_left
+        return opp_hands
+
+    def _rollout_total_penalty(self, board, my_hand, fixed_first_card, opp_hands):
+        sim_board = [row.copy() for row in board]
+        me = sorted(my_hand)
+        me.remove(fixed_first_card)
+
+        opp = [h.copy() for h in opp_hands]
+        rounds_left = len(my_hand)
+        my_total_penalty = 0
+
+        for r in range(rounds_left):
+            if r == 0:
+                my_card = fixed_first_card
+            else:
+                my_card = self._greedy_pick(me, sim_board)
+                me.remove(my_card)
+
+            played = [(my_card, self.player_idx)]
+
+            for i, oh in enumerate(opp):
+                if not oh:
+                    continue
+                oc = self._greedy_pick(oh, sim_board)
+                oh.remove(oc)
+                played.append((oc, -1000 - i))
+
+            played.sort(key=lambda x: x[0])
+            for card, pid in played:
+                gained = self._place_card(sim_board, card)
+                if pid == self.player_idx:
+                    my_total_penalty += gained
+
+        return my_total_penalty
+
     def action(self, hand, history):
         if len(hand) == 1:
             return hand[0]
 
+        start = time.perf_counter()
+        deadline = start + self.time_budget_sec
+
         board = history["board"]
         n_players = len(history["scores"])
         n_opponents = max(0, n_players - 1)
+        rounds_left = len(hand)
         unseen = self._build_unseen_pool(hand, history)
 
-        best_card = hand[0]
-        best_key = None
+        candidates = list(hand)
+        totals = {c: 0.0 for c in candidates}
+        counts = {c: 0 for c in candidates}
 
-        for my_card in hand:
-            total_penalty = 0.0
+        # Phase 1: guarantee a minimum number of samples per candidate.
+        for c in candidates:
+            for _ in range(self.min_samples_per_card):
+                if time.perf_counter() >= deadline:
+                    break
+                opp_hands = self._sample_opponent_hands(unseen, n_opponents, rounds_left)
+                loss = self._rollout_total_penalty(board, hand, c, opp_hands)
+                totals[c] += loss
+                counts[c] += 1
 
-            for _ in range(self.simulations):
-                if n_opponents == 0:
-                    opp_cards = []
-                elif len(unseen) >= n_opponents:
-                    opp_cards = self.rng.sample(unseen, n_opponents)
-                elif unseen:
-                    opp_cards = [self.rng.choice(unseen) for _ in range(n_opponents)]
-                else:
-                    # Extremely defensive fallback.
-                    opp_cards = [self.rng.randint(1, self.n_cards) for _ in range(n_opponents)]
+        # Phase 2: allocate remaining time adaptively (focus on best candidates).
+        active = candidates[:]
+        pulls = 0
+        while active and time.perf_counter() < deadline:
+            # Optimistic exploration: low mean first, then low sample count.
+            active.sort(
+                key=lambda c: (
+                    (totals[c] / counts[c]) if counts[c] else float("inf"),
+                    counts[c],
+                    c,
+                )
+            )
 
-                round_cards = [(my_card, self.player_idx)]
-                round_cards.extend((oc, -1000 - i) for i, oc in enumerate(opp_cards))
-                round_cards.sort(key=lambda x: x[0])
+            c = active[pulls % len(active)]
+            opp_hands = self._sample_opponent_hands(unseen, n_opponents, rounds_left)
+            loss = self._rollout_total_penalty(board, hand, c, opp_hands)
+            totals[c] += loss
+            counts[c] += 1
+            pulls += 1
 
-                sim_board = [row.copy() for row in board]
-                my_penalty = 0
-                for played_card, played_pid in round_cards:
-                    incurred = self._place_card(sim_board, played_card)
-                    if played_pid == self.player_idx:
-                        my_penalty = incurred
+            # Periodically prune weak candidates to spend time on contenders.
+            if pulls % max(12, len(candidates) * 2) == 0 and len(active) > 3:
+                ranked = sorted(
+                    active,
+                    key=lambda x: ((totals[x] / counts[x]) if counts[x] else float("inf"), x),
+                )
+                keep = max(3, len(active) // 2)
+                active = ranked[:keep]
 
-                total_penalty += my_penalty
-
-            expected_penalty = total_penalty / self.simulations
-            tiebreak = self._heuristic_tiebreak(board, my_card)
-            key = (expected_penalty,) + tiebreak
-
-            if best_key is None or key < best_key:
-                best_key = key
-                best_card = my_card
-
+        best_card = min(
+            candidates,
+            key=lambda c: (
+                (totals[c] / counts[c]) if counts[c] else float("inf"),
+                self._heuristic_card_key(board, c),
+            ),
+        )
         return best_card

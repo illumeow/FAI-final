@@ -30,7 +30,10 @@ Try them with:
 ```bash
 python run_single_game.py --config configs/game/simple_agents.json
 python run_tournament.py --config configs/tournament/simple_agents_smoke.json
+python run_tournament.py --config configs/tournament/simple_agents_benchmark.json
 ```
+
+Both simple-agent configs keep `args` empty, so the agents run with built-in defaults and remain submission-friendly.
 
 ## Config File Structure
 

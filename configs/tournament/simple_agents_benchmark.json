@@ -8,9 +8,14 @@
     "engine": {
         "n_players": 4,
         "n_rounds": 10,
-        "verbose": true,
+        "verbose": false,
         "timeout": 1.0,
         "timeout_buffer": 0.5
     },
-    "num_games": 1
+    "tournament": {
+        "type": "random_partition",
+        "duplication_mode": "none",
+        "num_games_per_player": 60,
+        "num_workers": 2
+    }
 }
