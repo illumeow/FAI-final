@@ -1,0 +1,37 @@
+{
+    "baselines": [
+        ["src.players.TA.public_baselines1", "Baseline1", {}, "B1"],
+        ["src.players.TA.public_baselines1", "Baseline2", {}, "B2"],
+        ["src.players.TA.public_baselines1", "Baseline3", {}, "B3"],
+        ["src.players.TA.public_baselines1", "Baseline4", {}, "B4"],
+        ["src.players.TA.public_baselines1", "Baseline5", {}, "B5"]
+    ],
+    "players": [
+        ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
+        ["src.players.agents.bitwise_search_player", "BitwiseSearchPlayer", {}, "bitwise"],
+        ["src.players.agents.cfr_player", "CFRPlayer", {}, "cfr"],
+        ["src.players.agents.expectimax_player", "ExpectimaxPlayer", {}, "expectimax"],
+        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"],
+        ["src.players.agents.heuristic_player", "HeuristicPlayer", {}, "heuristic"],
+        ["src.players.TA.random_player", "RandomPlayer", {}, "random"]
+    ],
+    "engine": {
+        "n_players": 4,
+        "n_rounds": 10,
+        "verbose": false,
+        "timeout": 1.0,
+        "timeout_buffer": 0.5
+    },
+    "tournament": {
+        "type": "random_partition",
+        "duplication_mode": "cycle",
+        "num_games_per_player": 40,
+        "num_workers": 4,
+        "scoring": {
+            "baseline_upper_pct": 0.8,
+            "baseline_lower_pct": 0.2,
+            "score_at_upper_pct": 80,
+            "score_at_lower_pct": 20
+        }
+    }
+}
