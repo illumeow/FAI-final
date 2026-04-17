@@ -30,6 +30,9 @@
         "tournament_repeats": 1,
         "cleanup_results": true,
         "tournament_timeout_sec": 1800,
+        "min_games_per_player": 12,
+        "budget_scales": [1.0, 0.6, 0.35, 0.2],
+        "force_none_duplication_on_fallback": true,
         "candidate_label": "ga_candidate",
         "opponents": [
             ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
@@ -46,8 +49,8 @@
         },
         "tournament": {
             "type": "random_partition",
-            "duplication_mode": "cycle",
-            "num_games_per_player": 120,
+            "duplication_mode": "none",
+            "num_games_per_player": 80,
             "num_workers": 2
         }
     }

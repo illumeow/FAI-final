@@ -75,6 +75,20 @@ class GeneticRolloutTrainer:
         self.finetune_tournament_repeats = int(finetune_cfg.get("tournament_repeats", 1))
         self.finetune_cleanup_results = bool(finetune_cfg.get("cleanup_results", True))
         self.finetune_timeout_sec = int(finetune_cfg.get("tournament_timeout_sec", 1800))
+        self.finetune_min_games_per_player = int(
+            finetune_cfg.get("min_games_per_player", 8)
+        )
+        raw_budget_scales = finetune_cfg.get("budget_scales", [1.0, 0.5, 0.25])
+        self.finetune_budget_scales = [
+            float(scale)
+            for scale in raw_budget_scales
+            if float(scale) > 0.0
+        ]
+        if not self.finetune_budget_scales:
+            self.finetune_budget_scales = [1.0]
+        self.finetune_force_none_duplication_on_fallback = bool(
+            finetune_cfg.get("force_none_duplication_on_fallback", True)
+        )
         self.finetune_candidate_label = str(finetune_cfg.get("candidate_label", "ga_candidate"))
         self.finetune_opponents = finetune_cfg.get("opponents", self._default_finetune_opponents())
         self.finetune_engine_cfg = dict(
@@ -289,7 +303,19 @@ class GeneticRolloutTrainer:
             "best_fitness": best_fitness,
         }
 
-    def _build_finetune_tournament_config(self, model_path):
+    def _scaled_tournament_cfg(self, budget_scale, is_fallback):
+        cfg = dict(self.finetune_tournament_cfg)
+        base_games = int(cfg.get("num_games_per_player", 120))
+        scaled_games = max(
+            self.finetune_min_games_per_player,
+            int(round(base_games * budget_scale)),
+        )
+        cfg["num_games_per_player"] = scaled_games
+        if is_fallback and self.finetune_force_none_duplication_on_fallback:
+            cfg["duplication_mode"] = "none"
+        return cfg
+
+    def _build_finetune_tournament_config(self, model_path, tournament_cfg):
         candidate = [
             "src.players.agents.genetic_rollout_player",
             "GeneticRolloutPlayer",
@@ -300,7 +326,7 @@ class GeneticRolloutTrainer:
         return {
             "players": players,
             "engine": dict(self.finetune_engine_cfg),
-            "tournament": dict(self.finetune_tournament_cfg),
+            "tournament": dict(tournament_cfg),
         }
 
     def _find_tournament_result(self, stem, min_mtime):
@@ -351,43 +377,72 @@ class GeneticRolloutTrainer:
             with tempfile.TemporaryDirectory(prefix="ga_finetune_") as tmpdir:
                 tmpdir_path = Path(tmpdir)
                 model_path = tmpdir_path / "weights.json"
-                cfg_stem = (
+                base_stem = (
                     f"ga_ft_{os.getpid()}_{int(time.time() * 1000)}_"
-                    f"{self.rng.randint(0, 10**9):09d}_{rep}"
+                    f"{self.rng.randint(0, 10**9):09d}_r{rep}"
                 )
-                cfg_path = tmpdir_path / f"{cfg_stem}.json"
 
                 model_payload = build_model_payload(weights, metadata={"source": "finetune_eval"})
                 with open(model_path, "w", encoding="utf-8") as f:
                     json.dump(model_payload, f, indent=2)
 
-                tournament_cfg = self._build_finetune_tournament_config(str(model_path))
-                with open(cfg_path, "w", encoding="utf-8") as f:
-                    json.dump(tournament_cfg, f, indent=2)
-
-                start_mtime = time.time()
-                cmd = [sys.executable, "run_tournament.py", "--config", str(cfg_path)]
-                proc = subprocess.run(
-                    cmd,
-                    cwd=str(self.repo_root),
-                    text=True,
-                    capture_output=True,
-                    timeout=self.finetune_timeout_sec,
-                    check=False,
-                )
-                if proc.returncode != 0:
-                    msg = (proc.stdout or "") + "\n" + (proc.stderr or "")
-                    raise RuntimeError(
-                        "run_tournament.py failed during finetune evaluation:\n"
-                        + "\n".join(msg.strip().splitlines()[-40:])
+                fitness = None
+                last_error = "unknown error"
+                for attempt_idx, scale in enumerate(self.finetune_budget_scales):
+                    cfg_stem = f"{base_stem}_a{attempt_idx}"
+                    cfg_path = tmpdir_path / f"{cfg_stem}.json"
+                    scaled_tournament_cfg = self._scaled_tournament_cfg(
+                        budget_scale=scale,
+                        is_fallback=(attempt_idx > 0),
                     )
+                    tournament_cfg = self._build_finetune_tournament_config(
+                        str(model_path),
+                        scaled_tournament_cfg,
+                    )
+                    with open(cfg_path, "w", encoding="utf-8") as f:
+                        json.dump(tournament_cfg, f, indent=2)
 
-                result_path = self._find_tournament_result(cfg_stem, start_mtime)
-                fitness = self._parse_candidate_fitness(result_path)
+                    timeout_sec = max(120, int(self.finetune_timeout_sec * scale))
+                    start_mtime = time.time()
+                    cmd = [sys.executable, "run_tournament.py", "--config", str(cfg_path)]
+                    try:
+                        proc = subprocess.run(
+                            cmd,
+                            cwd=str(self.repo_root),
+                            text=True,
+                            capture_output=True,
+                            timeout=timeout_sec,
+                            check=False,
+                        )
+                    except subprocess.TimeoutExpired:
+                        last_error = (
+                            f"timeout after {timeout_sec}s "
+                            f"(scale={scale}, attempt={attempt_idx + 1})"
+                        )
+                        print(f"[GA-FT] warning: {last_error}, retrying with smaller budget")
+                        continue
+
+                    if proc.returncode != 0:
+                        msg = (proc.stdout or "") + "\n" + (proc.stderr or "")
+                        last_error = "\n".join(msg.strip().splitlines()[-40:])
+                        print(
+                            f"[GA-FT] warning: tournament run failed "
+                            f"(scale={scale}, attempt={attempt_idx + 1}), retrying"
+                        )
+                        continue
+
+                    result_path = self._find_tournament_result(cfg_stem, start_mtime)
+                    fitness = self._parse_candidate_fitness(result_path)
+                    if self.finetune_cleanup_results:
+                        result_path.unlink(missing_ok=True)
+                    break
+
+                if fitness is None:
+                    raise RuntimeError(
+                        "All tournament-eval attempts failed during finetune.\n"
+                        f"Last error: {last_error}"
+                    )
                 repeat_fitness.append(fitness)
-
-                if self.finetune_cleanup_results:
-                    result_path.unlink(missing_ok=True)
 
         return sum(repeat_fitness) / float(len(repeat_fitness))
 
@@ -490,6 +545,9 @@ class GeneticRolloutTrainer:
                         "mutation_sigma": self.finetune_mutation_sigma,
                         "tournament_repeats": self.finetune_tournament_repeats,
                         "cleanup_results": self.finetune_cleanup_results,
+                        "min_games_per_player": self.finetune_min_games_per_player,
+                        "budget_scales": self.finetune_budget_scales,
+                        "force_none_duplication_on_fallback": self.finetune_force_none_duplication_on_fallback,
                         "candidate_label": self.finetune_candidate_label,
                     },
                     "random_seed": self.random_seed,
