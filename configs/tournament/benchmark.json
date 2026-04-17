@@ -10,10 +10,10 @@
         ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
         ["src.players.agents.bitwise_search_player", "BitwiseSearchPlayer", {}, "bitwise"],
         ["src.players.agents.cfr_player", "CFRPlayer", {}, "cfr"],
+        ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
         ["src.players.agents.expectimax_player", "ExpectimaxPlayer", {}, "expectimax"],
         ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"],
-        ["src.players.agents.heuristic_player", "HeuristicPlayer", {}, "heuristic"],
-        ["src.players.TA.random_player", "RandomPlayer", {}, "random"]
+        ["src.players.agents.heuristic_player", "HeuristicPlayer", {}, "heuristic"]
     ],
     "engine": {
         "n_players": 4,
