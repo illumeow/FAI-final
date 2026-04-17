@@ -15,8 +15,9 @@ class CFRPlayer:
         self.max_actions = 7
 
     def _candidate_subset(self, hand, board):
-        ranked = sorted(hand, key=lambda c: self.core.heuristic_card_key(board, c))
-        return ranked[: min(self.max_actions, len(ranked))]
+        return sorted(hand, key=lambda c: self.core.heuristic_card_key(board, c))[
+            : self.max_actions
+        ]
 
     def _strategy_from_regret(self, regrets, actions):
         positives = [max(0.0, regrets[a]) for a in actions]
@@ -62,11 +63,19 @@ class CFRPlayer:
                 regrets[a] += utilities[a] - node_util
                 strategy_sum[a] += strategy[a]
 
-        if sum(strategy_sum.values()) > 0:
+        strategy_mass = sum(strategy_sum.values())
+        if strategy_mass > 0:
             avg_strategy = {
-                a: strategy_sum[a] / sum(strategy_sum.values())
+                a: strategy_sum[a] / strategy_mass
                 for a in actions
             }
-            return max(actions, key=lambda a: (avg_strategy[a], utility_sum[a] / max(1, utility_count[a]), -a))
+            return max(
+                actions,
+                key=lambda a: (
+                    avg_strategy[a],
+                    utility_sum[a] / max(1, utility_count[a]),
+                    -a,
+                ),
+            )
 
         return min(actions, key=lambda a: self.core.heuristic_card_key(board, a))

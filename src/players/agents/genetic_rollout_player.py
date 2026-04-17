@@ -56,10 +56,9 @@ def load_weights_from_path(model_path):
         return validate_weights(payload)
 
     if isinstance(payload, dict):
-        if "best_weights" in payload:
-            return validate_weights(payload["best_weights"])
-        if "weights" in payload:
-            return validate_weights(payload["weights"])
+        for key in ("best_weights", "weights"):
+            if key in payload:
+                return validate_weights(payload[key])
 
     raise ValueError(
         "Model file must be a list of weights or a dict with "
@@ -173,24 +172,17 @@ class GeneticFeaturePolicy:
 
     def score_card(self, hand, board, card, unseen, n_opponents):
         feats = self.card_features(hand, board, card, unseen, n_opponents)
-        total = 0.0
-        for w, x in zip(self.weights, feats):
-            total += w * x
-        return total
+        return sum(w * x for w, x in zip(self.weights, feats))
 
     def select_card(self, hand, board, unseen, n_opponents):
-        best_card = hand[0]
-        best_key = None
-
-        for card in hand:
-            score = self.score_card(hand, board, card, unseen, n_opponents)
-            tie_key = self.core.heuristic_card_key(board, card)
-            key = (score, tie_key, card)
-            if best_key is None or key < best_key:
-                best_key = key
-                best_card = card
-
-        return best_card
+        return min(
+            hand,
+            key=lambda card: (
+                self.score_card(hand, board, card, unseen, n_opponents),
+                self.core.heuristic_card_key(board, card),
+                card,
+            ),
+        )
 
 
 class GeneticRolloutPlayer:

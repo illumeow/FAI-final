@@ -87,6 +87,16 @@ class HeuristicPlayer:
             total += comb(n, k) * (p ** k) * ((1.0 - p) ** (n - k))
         return total
 
+    @staticmethod
+    def _between_probability(unseen, low, high):
+        if not unseen or high - low <= 1:
+            return 0.0
+        between = 0
+        for card in unseen:
+            if low < card < high:
+                between += 1
+        return between / len(unseen)
+
     def _expected_current_round_penalty(self, board, card, unseen, n_opponents):
         fit_idx, fit_last = self._best_fit_row(board, card)
 
@@ -102,22 +112,14 @@ class HeuristicPlayer:
         if row_len >= 5:
             if not unseen or n_opponents <= 0:
                 return float(row_score), (0, delta, 1)
-            between = 0
-            for u in unseen:
-                if fit_last < u < card:
-                    between += 1
-            p_between = between / len(unseen)
+            p_between = self._between_probability(unseen, fit_last, card)
             p_stable = (1.0 - p_between) ** n_opponents
             return float(row_score) * p_stable, (0, delta, 1)
 
         if not unseen or n_opponents <= 0:
             return 0.0, (0, delta, row_len + 1)
 
-        between = 0
-        for u in unseen:
-            if fit_last < u < card:
-                between += 1
-        p_between = between / len(unseen)
+        p_between = self._between_probability(unseen, fit_last, card)
         needed_before_me = 5 - row_len
         p_forced_take = self._binom_tail(n_opponents, p_between, needed_before_me)
         expected = float(row_score) * p_forced_take
@@ -128,8 +130,7 @@ class HeuristicPlayer:
         if not remaining_hand:
             return 0.0
 
-        best = float("inf")
-        best_card = None
+        first_step = []
         for c in remaining_hand:
             next_board, penalty, meta = self._apply_card(board, c)
             forced_low, delta, post_len = meta
@@ -140,10 +141,9 @@ class HeuristicPlayer:
                 + (post_len / 14.0)
                 - (self._card_score(c) / 8.0)
             )
-            if local < best:
-                best = local
-                best_board = next_board
-                best_card = c
+            first_step.append((local, c, next_board))
+
+        best, best_card, best_board = min(first_step, key=lambda x: x[0])
 
         if len(remaining_hand) == 1:
             return best
@@ -155,8 +155,7 @@ class HeuristicPlayer:
 
         second = float("inf")
         for c in rem2:
-            _, p2, m2 = self._apply_card(best_board, c)
-            f2, d2, l2 = m2
+            _, p2, (f2, d2, l2) = self._apply_card(best_board, c)
             v2 = float(p2) + f2 * 0.8 + (d2 / 75.0) + (l2 / 15.0)
             if v2 < second:
                 second = v2
@@ -171,10 +170,7 @@ class HeuristicPlayer:
         unseen = self._build_unseen_pool(hand, history)
         n_opponents = max(0, len(history["scores"]) - 1)
 
-        best_card = hand[0]
-        best_key = None
-
-        for card in hand:
+        def decision_key(card):
             expected_now, meta = self._expected_current_round_penalty(
                 board,
                 card,
@@ -196,9 +192,6 @@ class HeuristicPlayer:
                 -self._card_score(card),
                 card,
             )
+            return key
 
-            if best_key is None or key < best_key:
-                best_key = key
-                best_card = card
-
-        return best_card
+        return min(hand, key=decision_key)

@@ -66,14 +66,7 @@ class SimpleAgentCore:
         return (penalty, 0, delta, row_len + 1, card)
 
     def greedy_pick(self, hand, board):
-        best = hand[0]
-        best_key = self.heuristic_card_key(board, best)
-        for card in hand[1:]:
-            key = self.heuristic_card_key(board, card)
-            if key < best_key:
-                best_key = key
-                best = card
-        return best
+        return min(hand, key=lambda c: self.heuristic_card_key(board, c))
 
     def build_unseen_pool(self, hand, history):
         known = set(hand)

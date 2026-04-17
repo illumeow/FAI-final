@@ -17,8 +17,9 @@ class ExpectimaxPlayer:
         self.samples_per_chance = 6
 
     def _candidate_cards(self, hand, board):
-        ranked = sorted(hand, key=lambda c: self.core.heuristic_card_key(board, c))
-        return ranked[: min(self.branching, len(ranked))]
+        return sorted(hand, key=lambda c: self.core.heuristic_card_key(board, c))[
+            : self.branching
+        ]
 
     def _sample_current_opp_cards(self, unseen, n_opponents):
         if n_opponents == 0:
@@ -28,6 +29,49 @@ class ExpectimaxPlayer:
         if unseen:
             return [self.core.rng.choice(unseen) for _ in range(n_opponents)]
         return [self.core.rng.randint(1, self.core.n_cards) for _ in range(n_opponents)]
+
+    def _next_unseen(self, unseen, opp_cards):
+        if not opp_cards:
+            return unseen
+        opp_set = set(opp_cards)
+        return [u for u in unseen if u not in opp_set]
+
+    def _estimate_action_value(
+        self,
+        board,
+        hand,
+        my_card,
+        unseen,
+        n_opponents,
+        depth,
+        deadline,
+        num_samples,
+    ):
+        total = 0.0
+        used = 0
+        for _ in range(num_samples):
+            if time.perf_counter() >= deadline:
+                break
+            opp_cards = self._sample_current_opp_cards(unseen, n_opponents)
+            next_board, my_penalty = self.core.apply_round(
+                board, my_card, opp_cards, self.player_idx
+            )
+            remaining_hand = [c for c in hand if c != my_card]
+            next_unseen = self._next_unseen(unseen, opp_cards)
+            future = self._expecti_value(
+                next_board,
+                remaining_hand,
+                next_unseen,
+                n_opponents,
+                depth,
+                deadline,
+            )
+            total += float(my_penalty) + future
+            used += 1
+
+        if used == 0:
+            return float("inf")
+        return total / used
 
     def _expecti_value(self, board, hand, unseen, n_opponents, depth, deadline):
         if depth <= 0 or not hand:
@@ -46,36 +90,16 @@ class ExpectimaxPlayer:
             if time.perf_counter() >= deadline:
                 break
 
-            total = 0.0
-            used = 0
-
-            for _ in range(self.samples_per_chance):
-                if time.perf_counter() >= deadline:
-                    break
-                opp_cards = self._sample_current_opp_cards(unseen, n_opponents)
-                next_board, my_penalty = self.core.apply_round(board, my_card, opp_cards, self.player_idx)
-
-                remaining_hand = [c for c in hand if c != my_card]
-                next_unseen = unseen
-                if opp_cards:
-                    opp_set = set(opp_cards)
-                    next_unseen = [u for u in unseen if u not in opp_set]
-
-                future = self._expecti_value(
-                    next_board,
-                    remaining_hand,
-                    next_unseen,
-                    n_opponents,
-                    depth - 1,
-                    deadline,
-                )
-                total += float(my_penalty) + future
-                used += 1
-
-            if used == 0:
-                value = float("inf")
-            else:
-                value = total / used
+            value = self._estimate_action_value(
+                board,
+                hand,
+                my_card,
+                unseen,
+                n_opponents,
+                depth - 1,
+                deadline,
+                self.samples_per_chance,
+            )
 
             if value < best_value:
                 best_value = value
@@ -98,31 +122,16 @@ class ExpectimaxPlayer:
             if time.perf_counter() >= deadline:
                 break
 
-            total = 0.0
-            used = 0
-            for _ in range(self.samples_per_chance + 2):
-                if time.perf_counter() >= deadline:
-                    break
-                opp_cards = self._sample_current_opp_cards(unseen, n_opponents)
-                next_board, my_penalty = self.core.apply_round(board, my_card, opp_cards, self.player_idx)
-                remaining_hand = [c for c in hand if c != my_card]
-                next_unseen = unseen
-                if opp_cards:
-                    opp_set = set(opp_cards)
-                    next_unseen = [u for u in unseen if u not in opp_set]
-
-                future = self._expecti_value(
-                    next_board,
-                    remaining_hand,
-                    next_unseen,
-                    n_opponents,
-                    self.depth - 1,
-                    deadline,
-                )
-                total += float(my_penalty) + future
-                used += 1
-
-            value = (total / used) if used > 0 else float("inf")
+            value = self._estimate_action_value(
+                board,
+                hand,
+                my_card,
+                unseen,
+                n_opponents,
+                self.depth - 1,
+                deadline,
+                self.samples_per_chance + 2,
+            )
             if value < best_value:
                 best_value = value
                 best_card = my_card

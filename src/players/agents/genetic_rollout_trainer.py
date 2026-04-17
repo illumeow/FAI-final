@@ -103,11 +103,42 @@ class GeneticRolloutTrainer:
 
     def _default_finetune_opponents(self):
         return [
-            ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
-            ["src.players.agents.bitwise_search_player", "BitwiseSearchPlayer", {}, "bitwise"],
+            [
+                "src.players.agents.bandit_rollout_player",
+                "BanditRolloutPlayer",
+                {},
+                "bandit",
+            ],
+            [
+                "src.players.agents.bitwise_search_player",
+                "BitwiseSearchPlayer",
+                {},
+                "bitwise",
+            ],
             ["src.players.agents.cfr_player", "CFRPlayer", {}, "cfr"],
-            ["src.players.agents.expectimax_player", "ExpectimaxPlayer", {}, "expectimax"],
+            [
+                "src.players.agents.expectimax_player",
+                "ExpectimaxPlayer",
+                {},
+                "expectimax",
+            ],
         ]
+
+    @staticmethod
+    def _rank_indices(fitnesses):
+        return sorted(range(len(fitnesses)), key=lambda i: fitnesses[i], reverse=True)
+
+    @staticmethod
+    def _mean(values):
+        return sum(values) / float(len(values))
+
+    @staticmethod
+    def _log_generation(tag, generation_idx, total_generations, best_fitness, mean_fitness):
+        print(
+            f"[{tag}] gen={generation_idx:03d}/{total_generations} "
+            f"best_fitness={best_fitness:.6f} "
+            f"mean_fitness={mean_fitness:.6f}"
+        )
 
     def _clip(self, value):
         if value > self.weight_clip:
@@ -227,22 +258,20 @@ class GeneticRolloutTrainer:
             states = [self._sample_state() for _ in range(self.state_samples)]
             fitnesses = [self._evaluate_rollout_fitness(g, states) for g in population]
 
-            ranked = sorted(
-                range(len(population)),
-                key=lambda i: fitnesses[i],
-                reverse=True,
-            )
+            ranked = self._rank_indices(fitnesses)
             gen_best_fitness = fitnesses[ranked[0]]
-            gen_mean_fitness = sum(fitnesses) / float(len(fitnesses))
+            gen_mean_fitness = self._mean(fitnesses)
 
             if gen_best_fitness > best_fitness:
                 best_fitness = gen_best_fitness
                 best_weights = population[ranked[0]][:]
 
-            print(
-                f"[GA-PT] gen={gen + 1:03d}/{self.generations} "
-                f"best_fitness={gen_best_fitness:.6f} "
-                f"mean_fitness={gen_mean_fitness:.6f}"
+            self._log_generation(
+                "GA-PT",
+                gen + 1,
+                self.generations,
+                gen_best_fitness,
+                gen_mean_fitness,
             )
 
             next_population = [population[i][:] for i in ranked[: self.elite_size]]
@@ -305,7 +334,13 @@ class GeneticRolloutTrainer:
             return float("-inf")
 
         safety_penalty = 0.0
-        for key in ("dq_count", "timeout_count", "exception_count", "err_oom_count", "err_generic_count"):
+        for key in (
+            "dq_count",
+            "timeout_count",
+            "exception_count",
+            "err_oom_count",
+            "err_generic_count",
+        ):
             safety_penalty += float(candidate.get(key, 0))
 
         return -float(avg_rank) - 0.05 * safety_penalty
@@ -369,22 +404,20 @@ class GeneticRolloutTrainer:
 
         for gen in range(self.finetune_generations):
             fitnesses = [self._evaluate_tournament_fitness(g) for g in population]
-            ranked = sorted(
-                range(len(population)),
-                key=lambda i: fitnesses[i],
-                reverse=True,
-            )
+            ranked = self._rank_indices(fitnesses)
             gen_best_fitness = fitnesses[ranked[0]]
-            gen_mean_fitness = sum(fitnesses) / float(len(fitnesses))
+            gen_mean_fitness = self._mean(fitnesses)
 
             if gen_best_fitness > best_fitness:
                 best_fitness = gen_best_fitness
                 best_weights = population[ranked[0]][:]
 
-            print(
-                f"[GA-FT] gen={gen + 1:03d}/{self.finetune_generations} "
-                f"best_fitness={gen_best_fitness:.6f} "
-                f"mean_fitness={gen_mean_fitness:.6f}"
+            self._log_generation(
+                "GA-FT",
+                gen + 1,
+                self.finetune_generations,
+                gen_best_fitness,
+                gen_mean_fitness,
             )
 
             next_population = [population[i][:] for i in ranked[: self.finetune_elite_size]]

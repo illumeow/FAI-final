@@ -7,11 +7,11 @@ from .bandit_rollout_player import BanditRolloutPlayer
 from .genetic_rollout_player import GeneticRolloutPlayer
 
 __all__ = [
-	"HeuristicPlayer",
-	"SimulationPlayer",
-	"CFRPlayer",
-	"ExpectimaxPlayer",
-	"BitwiseSearchPlayer",
-	"BanditRolloutPlayer",
-	"GeneticRolloutPlayer",
+    "HeuristicPlayer",
+    "SimulationPlayer",
+    "CFRPlayer",
+    "ExpectimaxPlayer",
+    "BitwiseSearchPlayer",
+    "BanditRolloutPlayer",
+    "GeneticRolloutPlayer",
 ]

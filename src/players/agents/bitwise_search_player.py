@@ -128,10 +128,7 @@ class BitwiseSearchPlayer:
         unseen_mask = self._build_unseen_mask(hand, history)
         unseen_cnt = unseen_mask.bit_count()
 
-        best_card = hand[0]
-        best_key = None
-
-        for card in hand:
+        def decision_key(card):
             expected, meta = self._expected_now(
                 board,
                 card,
@@ -167,9 +164,6 @@ class BitwiseSearchPlayer:
                 post_len,
                 card,
             )
+            return key
 
-            if best_key is None or key < best_key:
-                best_key = key
-                best_card = card
-
-        return best_card
+        return min(hand, key=decision_key)

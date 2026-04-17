@@ -76,14 +76,13 @@ class SimulationPlayer:
         return (penalty, 0, delta, row_len + 1, card)
 
     def _greedy_pick(self, hand, board):
-        best = hand[0]
-        best_key = self._heuristic_card_key(board, best)
-        for card in hand[1:]:
-            key = self._heuristic_card_key(board, card)
-            if key < best_key:
-                best_key = key
-                best = card
-        return best
+        return min(hand, key=lambda card: self._heuristic_card_key(board, card))
+
+    @staticmethod
+    def _mean_loss(totals, counts, card):
+        if counts[card] == 0:
+            return float("inf")
+        return totals[card] / counts[card]
 
     def _build_unseen_pool(self, hand, history):
         known = set(hand)
@@ -158,8 +157,7 @@ class SimulationPlayer:
         if len(hand) == 1:
             return hand[0]
 
-        start = time.perf_counter()
-        deadline = start + self.time_budget_sec
+        deadline = time.perf_counter() + self.time_budget_sec
 
         board = history["board"]
         n_players = len(history["scores"])
@@ -188,7 +186,7 @@ class SimulationPlayer:
             # Optimistic exploration: low mean first, then low sample count.
             active.sort(
                 key=lambda c: (
-                    (totals[c] / counts[c]) if counts[c] else float("inf"),
+                    self._mean_loss(totals, counts, c),
                     counts[c],
                     c,
                 )
@@ -205,7 +203,7 @@ class SimulationPlayer:
             if pulls % max(12, len(candidates) * 2) == 0 and len(active) > 3:
                 ranked = sorted(
                     active,
-                    key=lambda x: ((totals[x] / counts[x]) if counts[x] else float("inf"), x),
+                    key=lambda x: (self._mean_loss(totals, counts, x), x),
                 )
                 keep = max(3, len(active) // 2)
                 active = ranked[:keep]
@@ -213,7 +211,7 @@ class SimulationPlayer:
         best_card = min(
             candidates,
             key=lambda c: (
-                (totals[c] / counts[c]) if counts[c] else float("inf"),
+                self._mean_loss(totals, counts, c),
                 self._heuristic_card_key(board, c),
             ),
         )

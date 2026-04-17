@@ -17,8 +17,9 @@ class BanditRolloutPlayer:
         self.ucb_c = 1.20
 
     def _candidate_subset(self, hand, board):
-        ranked = sorted(hand, key=lambda c: self.core.heuristic_card_key(board, c))
-        return ranked[: min(self.max_actions, len(ranked))]
+        return sorted(hand, key=lambda c: self.core.heuristic_card_key(board, c))[
+            : self.max_actions
+        ]
 
     def action(self, hand, history):
         if len(hand) == 1:
