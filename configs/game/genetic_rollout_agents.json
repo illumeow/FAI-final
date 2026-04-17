@@ -1,0 +1,23 @@
+{
+    "players": [
+        [
+            "src.players.agents.genetic_rollout_player",
+            "GeneticRolloutPlayer",
+            {
+                "model_path": "configs/game/genetic_rollout_weights.json"
+            },
+            "genetic_rollout"
+        ],
+        ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
+        ["src.players.agents.cfr_player", "CFRPlayer", {}, "cfr"],
+        ["src.players.agents.bitwise_search_player", "BitwiseSearchPlayer", {}, "bitwise"]
+    ],
+    "engine": {
+        "n_players": 4,
+        "n_rounds": 10,
+        "verbose": true,
+        "timeout": 1.0,
+        "timeout_buffer": 0.5
+    },
+    "num_games": 1
+}
