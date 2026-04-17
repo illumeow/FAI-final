@@ -13,17 +13,35 @@
     "bias"
   ],
   "best_weights": [
-    1.35,
-    1.0,
-    0.22,
-    0.28,
-    0.44,
-    -0.16,
-    0.06,
-    0.85,
-    0.55,
-    0.0
+    0.6553226532009342,
+    1.145310587911744,
+    -0.30068973550357453,
+    -0.4220066935220267,
+    0.21219685082490147,
+    0.37822678634236295,
+    -0.18827667513003687,
+    -0.947596097173387,
+    -0.4871725525985485,
+    0.6525861317653151
   ],
-  "best_fitness": null,
-  "notes": "Initial seed weights before GA training."
+  "best_fitness": -5.390476190476191,
+  "trainer_config": {
+    "n_cards": 104,
+    "n_rows": 4,
+    "n_opponents": 3,
+    "population_size": 48,
+    "generations": 35,
+    "elite_size": 6,
+    "state_samples": 140,
+    "eval_rollouts": 6,
+    "tournament_k": 4,
+    "crossover_rate": 0.85,
+    "mutation_rate": 0.2,
+    "mutation_sigma": 0.16,
+    "weight_clip": 5.0,
+    "rounds_left_min": 3,
+    "rounds_left_max": 10,
+    "random_seed": 2026
+  },
+  "created_at_utc": "2026-04-17T03:55:46Z"
 }
