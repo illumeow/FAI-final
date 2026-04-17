@@ -1,0 +1,21 @@
+{
+    "players": [
+        ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr_plus"],
+        ["src.players.agents.cfr_player", "CFRPlayer", {}, "cfr"],
+        ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
+        ["src.players.agents.bitwise_search_player", "BitwiseSearchPlayer", {}, "bitwise"]
+    ],
+    "engine": {
+        "n_players": 4,
+        "n_rounds": 10,
+        "verbose": false,
+        "timeout": 1.0,
+        "timeout_buffer": 0.5
+    },
+    "tournament": {
+        "type": "random_partition",
+        "duplication_mode": "none",
+        "num_games_per_player": 40,
+        "num_workers": 2
+    }
+}
