@@ -1,0 +1,54 @@
+{
+    "output_path": "configs/GA/weights.json",
+    "random_seed": 2026,
+    "pretrain": {
+        "n_cards": 104,
+        "n_rows": 4,
+        "n_opponents": 3,
+        "population_size": 64,
+        "generations": 80,
+        "elite_size": 8,
+        "state_samples": 500,
+        "eval_rollouts": 12,
+        "tournament_k": 4,
+        "crossover_rate": 0.85,
+        "mutation_rate": 0.15,
+        "mutation_sigma": 0.1,
+        "weight_clip": 5.0,
+        "rounds_left_min": 3,
+        "rounds_left_max": 10
+    },
+    "finetune": {
+        "enabled": true,
+        "population_size": 16,
+        "generations": 6,
+        "elite_size": 4,
+        "tournament_k": 4,
+        "crossover_rate": 0.8,
+        "mutation_rate": 0.12,
+        "mutation_sigma": 0.08,
+        "tournament_repeats": 1,
+        "cleanup_results": true,
+        "tournament_timeout_sec": 1800,
+        "candidate_label": "ga_candidate",
+        "opponents": [
+            ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
+            ["src.players.agents.bitwise_search_player", "BitwiseSearchPlayer", {}, "bitwise"],
+            ["src.players.agents.cfr_player", "CFRPlayer", {}, "cfr"],
+            ["src.players.agents.expectimax_player", "ExpectimaxPlayer", {}, "expectimax"]
+        ],
+        "engine": {
+            "n_players": 4,
+            "n_rounds": 10,
+            "verbose": false,
+            "timeout": 1.0,
+            "timeout_buffer": 0.5
+        },
+        "tournament": {
+            "type": "random_partition",
+            "duplication_mode": "cycle",
+            "num_games_per_player": 120,
+            "num_workers": 2
+        }
+    }
+}
