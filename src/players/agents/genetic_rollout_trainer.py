@@ -11,12 +11,24 @@ from pathlib import Path
 
 from .core_utils import SimpleAgentCore
 from .genetic_rollout_player import (
-    DEFAULT_WEIGHTS,
     FEATURE_NAMES,
     GeneticFeaturePolicy,
     build_model_payload,
     validate_weights,
 )
+
+
+def _require(mapping, key, where):
+    if key not in mapping:
+        raise ValueError(f"Missing required key '{key}' in {where}.")
+    return mapping[key]
+
+
+def _require_dict(mapping, key, where):
+    value = _require(mapping, key, where)
+    if not isinstance(value, dict):
+        raise ValueError(f"Expected '{key}' in {where} to be a JSON object.")
+    return value
 
 
 class GeneticRolloutTrainer:
@@ -26,34 +38,29 @@ class GeneticRolloutTrainer:
         self.results_dir = self.repo_root / "results" / "tournament"
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
-        pretrain_cfg = self.cfg.get("pretrain")
-        if not isinstance(pretrain_cfg, dict):
-            raise ValueError("train config must include a 'pretrain' object.")
+        pretrain_cfg = _require_dict(self.cfg, "pretrain", "train config")
+        finetune_cfg = _require_dict(self.cfg, "finetune", "train config")
 
-        finetune_cfg = self.cfg.get("finetune", {})
-        if not isinstance(finetune_cfg, dict):
-            raise ValueError("'finetune' must be a JSON object when provided.")
+        self.n_cards = int(_require(pretrain_cfg, "n_cards", "train config.pretrain"))
+        self.n_rows = int(_require(pretrain_cfg, "n_rows", "train config.pretrain"))
+        self.n_opponents = int(_require(pretrain_cfg, "n_opponents", "train config.pretrain"))
 
-        self.n_cards = int(pretrain_cfg.get("n_cards", 104))
-        self.n_rows = int(pretrain_cfg.get("n_rows", 4))
-        self.n_opponents = int(pretrain_cfg.get("n_opponents", 3))
+        self.population_size = int(_require(pretrain_cfg, "population_size", "train config.pretrain"))
+        self.generations = int(_require(pretrain_cfg, "generations", "train config.pretrain"))
+        self.elite_size = int(_require(pretrain_cfg, "elite_size", "train config.pretrain"))
+        self.state_samples = int(_require(pretrain_cfg, "state_samples", "train config.pretrain"))
+        self.eval_rollouts = int(_require(pretrain_cfg, "eval_rollouts", "train config.pretrain"))
+        self.tournament_k = int(_require(pretrain_cfg, "tournament_k", "train config.pretrain"))
 
-        self.population_size = int(pretrain_cfg.get("population_size", 40))
-        self.generations = int(pretrain_cfg.get("generations", 30))
-        self.elite_size = int(pretrain_cfg.get("elite_size", 4))
-        self.state_samples = int(pretrain_cfg.get("state_samples", 120))
-        self.eval_rollouts = int(pretrain_cfg.get("eval_rollouts", 6))
-        self.tournament_k = int(pretrain_cfg.get("tournament_k", 4))
+        self.crossover_rate = float(_require(pretrain_cfg, "crossover_rate", "train config.pretrain"))
+        self.mutation_rate = float(_require(pretrain_cfg, "mutation_rate", "train config.pretrain"))
+        self.mutation_sigma = float(_require(pretrain_cfg, "mutation_sigma", "train config.pretrain"))
+        self.weight_clip = float(_require(pretrain_cfg, "weight_clip", "train config.pretrain"))
 
-        self.crossover_rate = float(pretrain_cfg.get("crossover_rate", 0.85))
-        self.mutation_rate = float(pretrain_cfg.get("mutation_rate", 0.22))
-        self.mutation_sigma = float(pretrain_cfg.get("mutation_sigma", 0.18))
-        self.weight_clip = float(pretrain_cfg.get("weight_clip", 5.0))
+        self.rounds_left_min = int(_require(pretrain_cfg, "rounds_left_min", "train config.pretrain"))
+        self.rounds_left_max = int(_require(pretrain_cfg, "rounds_left_max", "train config.pretrain"))
 
-        self.rounds_left_min = int(pretrain_cfg.get("rounds_left_min", 4))
-        self.rounds_left_max = int(pretrain_cfg.get("rounds_left_max", 10))
-
-        self.random_seed = int(self.cfg.get("random_seed", 2026))
+        self.random_seed = int(_require(self.cfg, "random_seed", "train config"))
         self.rng = random.Random(self.random_seed)
         self.eval_core = SimpleAgentCore(
             player_idx=0,
@@ -61,82 +68,68 @@ class GeneticRolloutTrainer:
             seed_offset=39017,
         )
 
-        initial = self.cfg.get("initial_weights", DEFAULT_WEIGHTS)
-        self.initial_weights = validate_weights(initial)
-
-        self.finetune_enabled = bool(finetune_cfg.get("enabled", True))
-        self.finetune_generations = int(finetune_cfg.get("generations", 6))
-        self.finetune_population_size = int(finetune_cfg.get("population_size", 16))
-        self.finetune_elite_size = int(finetune_cfg.get("elite_size", 4))
-        self.finetune_tournament_k = int(finetune_cfg.get("tournament_k", 4))
-        self.finetune_crossover_rate = float(finetune_cfg.get("crossover_rate", 0.8))
-        self.finetune_mutation_rate = float(finetune_cfg.get("mutation_rate", 0.12))
-        self.finetune_mutation_sigma = float(finetune_cfg.get("mutation_sigma", 0.08))
-        self.finetune_tournament_repeats = int(finetune_cfg.get("tournament_repeats", 1))
-        self.finetune_cleanup_results = bool(finetune_cfg.get("cleanup_results", True))
-        self.finetune_timeout_sec = int(finetune_cfg.get("tournament_timeout_sec", 1800))
-        self.finetune_min_games_per_player = int(
-            finetune_cfg.get("min_games_per_player", 8)
+        self.initial_weights = validate_weights(
+            _require(self.cfg, "initial_weights", "train config")
         )
-        raw_budget_scales = finetune_cfg.get("budget_scales", [1.0, 0.5, 0.25])
+
+        self.finetune_enabled = bool(_require(finetune_cfg, "enabled", "train config.finetune"))
+        self.finetune_generations = int(_require(finetune_cfg, "generations", "train config.finetune"))
+        self.finetune_population_size = int(_require(finetune_cfg, "population_size", "train config.finetune"))
+        self.finetune_elite_size = int(_require(finetune_cfg, "elite_size", "train config.finetune"))
+        self.finetune_tournament_k = int(_require(finetune_cfg, "tournament_k", "train config.finetune"))
+        self.finetune_crossover_rate = float(_require(finetune_cfg, "crossover_rate", "train config.finetune"))
+        self.finetune_mutation_rate = float(_require(finetune_cfg, "mutation_rate", "train config.finetune"))
+        self.finetune_mutation_sigma = float(_require(finetune_cfg, "mutation_sigma", "train config.finetune"))
+        self.finetune_tournament_repeats = int(_require(finetune_cfg, "tournament_repeats", "train config.finetune"))
+        self.finetune_cleanup_results = bool(_require(finetune_cfg, "cleanup_results", "train config.finetune"))
+        self.finetune_timeout_sec = int(_require(finetune_cfg, "tournament_timeout_sec", "train config.finetune"))
+        self.finetune_min_games_per_player = int(
+            _require(finetune_cfg, "min_games_per_player", "train config.finetune")
+        )
+        raw_budget_scales = _require(
+            finetune_cfg,
+            "budget_scales",
+            "train config.finetune",
+        )
         self.finetune_budget_scales = [
             float(scale)
             for scale in raw_budget_scales
             if float(scale) > 0.0
         ]
         if not self.finetune_budget_scales:
-            self.finetune_budget_scales = [1.0]
+            raise ValueError("train config.finetune.budget_scales must include positive values.")
         self.finetune_force_none_duplication_on_fallback = bool(
-            finetune_cfg.get("force_none_duplication_on_fallback", True)
+            _require(
+                finetune_cfg,
+                "force_none_duplication_on_fallback",
+                "train config.finetune",
+            )
         )
-        self.finetune_candidate_label = str(finetune_cfg.get("candidate_label", "ga_candidate"))
-        self.finetune_opponents = finetune_cfg.get("opponents", self._default_finetune_opponents())
+        self.finetune_candidate_label = str(
+            _require(finetune_cfg, "candidate_label", "train config.finetune")
+        )
+        self.finetune_opponents = _require(
+            finetune_cfg,
+            "opponents",
+            "train config.finetune",
+        )
+        if not isinstance(self.finetune_opponents, list):
+            raise ValueError("train config.finetune.opponents must be a list.")
+
         self.finetune_engine_cfg = dict(
-            finetune_cfg.get(
+            _require_dict(
+                finetune_cfg,
                 "engine",
-                {
-                    "n_players": 4,
-                    "n_rounds": 10,
-                    "verbose": False,
-                    "timeout": 1.0,
-                    "timeout_buffer": 0.5,
-                },
+                "train config.finetune",
             )
         )
         self.finetune_tournament_cfg = dict(
-            finetune_cfg.get(
+            _require_dict(
+                finetune_cfg,
                 "tournament",
-                {
-                    "type": "random_partition",
-                    "duplication_mode": "cycle",
-                    "num_games_per_player": 120,
-                    "num_workers": 2,
-                },
+                "train config.finetune",
             )
         )
-
-    def _default_finetune_opponents(self):
-        return [
-            [
-                "src.players.agents.bandit_rollout_player",
-                "BanditRolloutPlayer",
-                {},
-                "bandit",
-            ],
-            [
-                "src.players.agents.bitwise_search_player",
-                "BitwiseSearchPlayer",
-                {},
-                "bitwise",
-            ],
-            ["src.players.agents.cfr_player", "CFRPlayer", {}, "cfr"],
-            [
-                "src.players.agents.expectimax_player",
-                "ExpectimaxPlayer",
-                {},
-                "expectimax",
-            ],
-        ]
 
     @staticmethod
     def _rank_indices(fitnesses):
@@ -305,7 +298,7 @@ class GeneticRolloutTrainer:
 
     def _scaled_tournament_cfg(self, budget_scale, is_fallback):
         cfg = dict(self.finetune_tournament_cfg)
-        base_games = int(cfg.get("num_games_per_player", 120))
+        base_games = int(cfg["num_games_per_player"])
         scaled_games = max(
             self.finetune_min_games_per_player,
             int(round(base_games * budget_scale)),
@@ -402,7 +395,7 @@ class GeneticRolloutTrainer:
                     with open(cfg_path, "w", encoding="utf-8") as f:
                         json.dump(tournament_cfg, f, indent=2)
 
-                    timeout_sec = max(120, int(self.finetune_timeout_sec * scale))
+                    timeout_sec = max(1200, int(self.finetune_timeout_sec * scale))
                     start_mtime = time.time()
                     cmd = [sys.executable, "run_tournament.py", "--config", str(cfg_path)]
                     try:
@@ -584,18 +577,10 @@ def main():
         required=True,
         help="Path to GA training JSON config.",
     )
-    parser.add_argument(
-        "--output",
-        type=str,
-        default=None,
-        help="Optional model output path. Overrides output_path in the train config.",
-    )
     args = parser.parse_args()
 
     cfg = _load_json(args.train_config)
-    output_path = args.output or cfg.get("output_path")
-    if not output_path:
-        raise ValueError("Please provide output_path in config or pass --output.")
+    output_path = str(_require(cfg, "output_path", "train config"))
 
     trainer = GeneticRolloutTrainer(cfg)
     payload = trainer.train()

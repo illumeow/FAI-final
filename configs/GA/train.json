@@ -1,6 +1,7 @@
 {
     "output_path": "configs/GA/weights.json",
     "random_seed": 2026,
+    "initial_weights": [1.35, 1.0, 0.22, 0.28, 0.44, -0.16, 0.06, 0.85, 0.55, 0.0],
     "pretrain": {
         "n_cards": 104,
         "n_rows": 4,
@@ -21,7 +22,7 @@
     "finetune": {
         "enabled": true,
         "population_size": 16,
-        "generations": 6,
+        "generations": 20,
         "elite_size": 4,
         "tournament_k": 4,
         "crossover_rate": 0.8,
@@ -31,14 +32,13 @@
         "cleanup_results": true,
         "tournament_timeout_sec": 1800,
         "min_games_per_player": 12,
-        "budget_scales": [1.0, 0.6, 0.35, 0.2],
+        "budget_scales": [1.0, 0.6, 0.4, 0.2],
         "force_none_duplication_on_fallback": true,
         "candidate_label": "ga_candidate",
         "opponents": [
             ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
-            ["src.players.agents.bitwise_search_player", "BitwiseSearchPlayer", {}, "bitwise"],
-            ["src.players.agents.cfr_player", "CFRPlayer", {}, "cfr"],
-            ["src.players.agents.expectimax_player", "ExpectimaxPlayer", {}, "expectimax"]
+            ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"],
+            ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"]
         ],
         "engine": {
             "n_players": 4,
@@ -51,7 +51,7 @@
             "type": "random_partition",
             "duplication_mode": "none",
             "num_games_per_player": 80,
-            "num_workers": 2
+            "num_workers": 32
         }
     }
 }
