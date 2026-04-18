@@ -1,9 +1,9 @@
 {
     "players": [
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr_plus"],
-        ["src.players.agents.cfr_player", "CFRPlayer", {}, "cfr"],
         ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"]
+        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"],
+        ["src.players.agents.genetic_rollout_player", "GeneticRolloutPlayer", { "model_path": "configs/GA/weight.json"}, "genetic"]
     ],
     "engine": {
         "n_players": 4,
@@ -15,7 +15,7 @@
     "tournament": {
         "type": "random_partition",
         "duplication_mode": "cycle",
-        "num_games_per_player": 2000,
+        "num_games_per_player": 1000,
         "num_workers": 32
     }
 }

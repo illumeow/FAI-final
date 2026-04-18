@@ -192,18 +192,16 @@ class GeneticRolloutPlayer:
     You can pass a JSON model via model_path. If omitted, it uses default weights.
     """
 
-    def __init__(self, player_idx, model_path=None, weights=None):
+    def __init__(self, player_idx, model_path=None):
         self.player_idx = player_idx
         self.core = SimpleAgentCore(player_idx, seed_offset=25013)
-        self.weights = self._resolve_weights(model_path=model_path, weights=weights)
+        self.weights = self._resolve_weights(model_path=model_path)
         self.policy = GeneticFeaturePolicy(self.core, self.weights)
 
-    def _resolve_weights(self, model_path=None, weights=None):
-        if weights is not None:
-            return validate_weights(weights)
-        if model_path is not None:
-            return load_weights_from_path(model_path)
-        return DEFAULT_WEIGHTS[:]
+    def _resolve_weights(self, model_path=None):
+        if model_path is None:
+            raise ValueError("model_path is required for GeneticRolloutPlayer.")
+        return load_weights_from_path(model_path)
 
     def action(self, hand, history):
         if len(hand) == 1:
