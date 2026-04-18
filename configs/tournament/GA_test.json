@@ -3,7 +3,7 @@
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr_plus"],
         ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
         ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"],
-        ["src.players.agents.genetic_rollout_player", "GeneticRolloutPlayer", { "model_path": "configs/GA/weight.json"}, "genetic"]
+        ["src.players.agents.genetic_rollout_player", "GeneticRolloutPlayer", { "model_path": "configs/GA/weights.json"}, "genetic"]
     ],
     "engine": {
         "n_players": 4,
