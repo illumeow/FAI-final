@@ -13,20 +13,20 @@
     "bias"
   ],
   "best_weights": [
-    0.8711288957104352,
-    0.09804864519877983,
-    0.257324187361306,
-    -0.623757626230715,
-    1.377962412035585,
-    0.24715818405575762,
-    -0.4184109843726965,
-    0.1462998149231145,
-    -0.30471432244722535,
-    -0.17709793589924552
+    0.39583120896342994,
+    0.9533937137454145,
+    0.4201654870212692,
+    -0.1949415312095129,
+    1.2621667852244587,
+    0.38817529075233936,
+    -0.2266473806278698,
+    -1.7405625574425176,
+    -0.6655067441201062,
+    -0.08763648566979403
   ],
-  "best_fitness": -2.11875,
-  "pretrain_best_fitness": -5.890333333333329,
-  "finetune_best_fitness": -2.11875,
+  "best_fitness": -2.48125,
+  "pretrain_best_fitness": -5.997499999999998,
+  "finetune_best_fitness": -2.48125,
   "selected_from": "finetune_tournament",
   "trainer_config": {
     "n_cards": 104,
@@ -49,7 +49,7 @@
     "finetune": {
       "enabled": true,
       "population_size": 16,
-      "generations": 6,
+      "generations": 20,
       "elite_size": 4,
       "tournament_k": 4,
       "crossover_rate": 0.8,
@@ -61,13 +61,13 @@
       "budget_scales": [
         1.0,
         0.6,
-        0.35,
+        0.4,
         0.2
       ],
       "force_none_duplication_on_fallback": true,
       "candidate_label": "ga_candidate"
     },
-    "random_seed": 2026
+    "random_seed": 42
   },
-  "created_at_utc": "2026-04-18T10:45:35Z"
+  "created_at_utc": "2026-04-18T23:39:28Z"
 }
