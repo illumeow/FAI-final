@@ -56,6 +56,10 @@ class GameCore:
         """
         fit_idx = self.best_fit_row(board, card)
         if fit_idx != -1:
+            if len(board[fit_idx]) >= 5:
+                incurred = self.row_score(board[fit_idx])
+                board[fit_idx] = [card]
+                return incurred
             board[fit_idx].append(card)
             return 0
 
@@ -79,7 +83,8 @@ class GameCore:
 
         delta = card - board[fit_idx][-1]
         row_len = len(board[fit_idx])
-        return (0, 0, delta, row_len + 1, card)
+        score = self.row_score(board[fit_idx]) if row_len >= 5 else 0
+        return (score, 0, delta, row_len + 1, card)
 
     def greedy_pick(self, hand: list[int], board: list[list[int]]) -> int:
         return min(hand, key=lambda c: self.heuristic_card_key(board, c))
