@@ -29,17 +29,10 @@ class GameCore:
 
     
     def best_fit_row(self, board: list[list[int]], card: int) -> int:
-        """
-        best fit = largest last card < card
-        return row idx
-        return -1 if all rows' last > card
-        """
+        """get the row index if placing the card (by engine rule)"""
         best_idx = -1
         best_last = -1
         for i, row in enumerate(board):
-            # full rows
-            if len(row) == 5:
-                continue
             last = row[-1]
             if last < card and last > best_last:
                 best_last = last
@@ -96,6 +89,9 @@ class GameCore:
 
         for row in history["board"]:
             known.update(row)
+
+        for past_action in history["history_matrix"]:
+            known.update(past_action)
 
         for past_board in history["board_history"]:
             for row in past_board:
