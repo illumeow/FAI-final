@@ -1,0 +1,14 @@
+{
+    "players": [
+        ["src.players.TA.random_player", "RandomPlayer"],
+        ["src.players.TA.human_player", "HumanPlayer"]
+    ],
+    "engine": {
+        "n_players": 2,
+        "n_rounds": 10,
+        "verbose": true,
+        "timeout": 1800.0,
+        "timeout_buffer": 0.5
+    },
+    "num_games": 1
+}

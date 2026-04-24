@@ -10,7 +10,7 @@
 ## Decision Logic
 - Guarantee a minimum number of samples per candidate card.
 - Continue adaptive sampling and prune weak candidates.
-- Pick the card with the lowest estimated expected total penalty.
+- Pick the card with the lowest estimated expected total score.
 
 ## Strengths
 - Handles uncertainty directly via sampling.

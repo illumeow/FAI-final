@@ -79,7 +79,7 @@ Class engine:
 
 - Timeouts: You have __1 second__ to play your card.
     - The timeout is a self-defined class
-        ```py
+        ```python
         class TimeoutException(BaseException):
             pass
         ```
@@ -181,24 +181,70 @@ Notes for `__init__()`:
 Notes about `action()`:
 - Hands are sorted! You don’t have to sort them again.
 - It is recommended to compute values you need from the board_history instead of storing them, since your values might be incorrect if timeouts occur.
-- The following are included in the history state:
-    ```py
-    history_state = {
-        "board": self.board,
-        "scores": self.scores,  # current score of each agent
-        "round": self.round,
-        "history_matrix": self.history_matrix,  # cards players played in each round
-        "board_history": self.board_history,  # cards on the table in each round
-        "score_history": self.score_history,  # penalties players gained in each round
-    }
-    ```
+
+History format:
+```python
+history = {
+    "board": self.board,
+    "scores": self.scores,  # current score of each agent
+    "round": self.round,
+    "history_matrix": self.history_matrix,  # cards players played in each round
+    "board_history": self.board_history,  # cards on the table in each round
+    "score_history": self.score_history,  # penalties players gained in each round
+}
+```
+e.g. you can get you current score from `history["scores"][self.player_idx]`, or get the cards played in the last round from `history["history_matrix"][-1]`, where the card you played is `history["history_matrix"][-1][self.player_idx]`.
+
+Example:
+```python
+history = {
+    "board": [
+        [ 4, 8 ],
+        [ 53 ],
+        [ 55, 102 ],
+        [ 13, 22 ]
+    ],
+    "scores": [
+        0, 1
+    ],
+    "round": 2,
+    "history_matrix": [
+        [ 22, 4 ],
+        [ 102, 8 ]
+    ],
+    "board_history": [
+        [
+            [ 41 ],
+            [ 53 ],
+            [ 55 ],
+            [ 13 ]
+        ],
+        [
+            [ 4 ],
+            [ 53 ],
+            [ 55 ],
+            [ 13, 22 ]
+        ],
+        [
+            [ 4, 8 ],
+            [ 53 ],
+            [ 55, 102 ],
+            [ 13, 22 ]
+        ]
+    ],
+    "score_history": [
+        [ 0, 1 ],
+        [ 0, 1 ]
+    ]
+}
+```
 ### Running Games and Tournaments
 
 Please refer to [README.md](./README.md) for more details.
 
 ### Saved Results – Game
 
-```py
+```python
 output_data = {
     "config": game_config,
     "game_results": {
@@ -208,7 +254,7 @@ output_data = {
     }
 }
 ```
-```py
+```python
 full_history = {
     "board_history": self.board_history,
     "flags_matrix": self.flags_matrix,
@@ -222,7 +268,7 @@ Results are saved in `results/game`.
 
 ### Saved Results – Tournament
 
-```py
+```python
 output_data = {
     "config": config,
     "standings": final_standings,
@@ -239,7 +285,7 @@ output_data = {
 - Player ranks for each game
 - Player scores for each game
 `history` is a list:
-```py
+```python
 matchup_history.append({
     "matchup_id": idx,
     "players": list(combo),

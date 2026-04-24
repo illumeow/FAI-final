@@ -1,0 +1,21 @@
+{
+    "players": [
+        ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
+        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"],
+        ["src.players.agents.old.cfr_plus_player", "CFRPlusPlayer", {}, "old cfr+"],
+        ["src.players.agents.old.simulation_player", "SimulationPlayer", {}, "old simulation"]
+    ],
+    "engine": {
+        "n_players": 4,
+        "n_rounds": 10,
+        "verbose": false,
+        "timeout": 1.0,
+        "timeout_buffer": 0.5
+    },
+    "tournament": {
+        "type": "random_partition",
+        "duplication_mode": "cycle",
+        "num_games_per_player": 2000,
+        "num_workers": 32
+    }
+}
