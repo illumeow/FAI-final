@@ -1,9 +1,9 @@
 {
     "players": [
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"],
+        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "sim"],
         ["src.players.agents.v1.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+ v1"],
-        ["src.players.agents.v1.simulation_player", "SimulationPlayer", {}, "simulation v1"]
+        ["src.players.agents.v1.simulation_player", "SimulationPlayer", {}, "sim v1"]
     ],
     "engine": {
         "n_players": 4,
