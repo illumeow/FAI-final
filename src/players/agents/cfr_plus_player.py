@@ -104,7 +104,7 @@ class CFRPlusPlayer:
 
     def __init__(self, player_idx: int) -> None:
         self.player_idx = player_idx
-        self.core = GameCore(player_idx, seed_offset=27013)
+        self.core = GameCore(player_idx)
         self.rollout_evaluator = CFRRolloutEvaluator(self.core, player_idx)
         self.hand_assignment_utils = HandAssignmentUtils()
 

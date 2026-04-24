@@ -8,6 +8,11 @@ class SimulationRolloutEvaluator:
         self.core = core
         self.player_idx = player_idx
 
+    """
+    Given state (hand, board) and action (fixed_first_card)
+    Given sampled opponent hands (opp_hands)
+    Simulate the rest of the game with greedy policies and return my total score at the end
+    """
     def rollout_total_score(
         self,
         board: list[list[int]],
@@ -66,7 +71,7 @@ class SimulationPlayer:
 
     def __init__(self, player_idx: int) -> None:
         self.player_idx = player_idx
-        self.core = GameCore(player_idx, seed_offset=40009, seed_stride=1)
+        self.core = GameCore(player_idx)
         self.rollout_evaluator = SimulationRolloutEvaluator(self.core, player_idx)
         self.time_budget_sec = 0.92
         self.min_samples_per_card = 4
@@ -79,11 +84,11 @@ class SimulationPlayer:
 
         board = history["board"]
         n_players = len(history["scores"])
-        n_opponents = max(0, n_players - 1)
+        n_opponents = n_players - 1
         rounds_left = len(hand)
         unseen = self.core.build_unseen_pool(hand, history)
 
-        candidates: list[int] = list(hand)
+        candidates: list[int] = hand
         totals: dict[int, float] = {c: 0.0 for c in candidates}
         counts: dict[int, int] = {c: 0 for c in candidates}
 

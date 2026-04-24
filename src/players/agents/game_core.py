@@ -6,8 +6,8 @@ class GameCore:
         self,
         player_idx: int,
         n_cards: int = 104,
-        seed_offset: int = 0,
-        seed_stride: int = 7919,
+        seed_offset: int = 42,
+        seed_stride: int = 223,
     ) -> None:
         self.player_idx = player_idx
         self.n_cards = n_cards
@@ -27,10 +27,13 @@ class GameCore:
     def row_score(self, row: list[int]) -> int:
         return sum(self.card_score(card) for card in row)
 
-    # best fit = largest last card < card
-    # return row idx
-    # return -1 if all rows' last > card
+    
     def best_fit_row(self, board: list[list[int]], card: int) -> int:
+        """
+        best fit = largest last card < card
+        return row idx
+        return -1 if all rows' last > card
+        """
         best_idx = -1
         best_last = -1
         for i, row in enumerate(board):
@@ -43,15 +46,21 @@ class GameCore:
                 best_idx = i
         return best_idx
 
-    # the row with the lowest score, then fewest cards, then lowest index
     def forced_take_row(self, board: list[list[int]]) -> int:
+        """
+        return the row idx to take when forced to take
+        orders by (score, len, idx) lowest first
+        """
         return min(
             range(len(board)),
             key=lambda i: (self.row_score(board[i]), len(board[i]), i)
         )
 
-    # return the score incurred by placing the card
     def place_card(self, board: list[list[int]], card: int) -> int:
+        """
+        return score incurred by placing the card on the board
+        also change the board state
+        """
         fit_idx = self.best_fit_row(board, card)
         if fit_idx != -1:
             board[fit_idx].append(card)
@@ -62,12 +71,12 @@ class GameCore:
         board[take_idx] = [card]
         return incurred
 
-    # heuristic: (score incurred, is_take, delta to last card, new row length, card value)
     def heuristic_card_key(
         self,
         board: list[list[int]],
         card: int,
     ) -> tuple[int, int, int, int, int]:
+        """heuristic: (score incurred, is_take, delta to last card, new row length, card value)"""
         fit_idx = self.best_fit_row(board, card)
 
         if fit_idx == -1:
