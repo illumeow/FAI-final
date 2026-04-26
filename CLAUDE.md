@@ -76,7 +76,7 @@ There is no lint command and no unit-test suite in-tree (no pytest/ruff/mypy). V
   - `["module.path", "ClassName"]`
   - `["module.path", "ClassName", {args}, "label"]`
   - `{"path": "...", "class": "...", "args": {...}, "label": "..."}`
-  - `label` is the column name in tournament standings — useful when multiple entries share the same class.
+  - `label` is the column name in tournament standings — useful when multiple entries share the same class. Max 9 characters.
 - **Keep `args` empty** in submitted configs; put safe defaults in `__init__` instead. The grader runs with empty args.
 - **Fixed evaluation engine config**:
   `{"n_players": 4, "n_rounds": 10, "verbose": false, "timeout": 1.0, "timeout_buffer": 0.5}`.
