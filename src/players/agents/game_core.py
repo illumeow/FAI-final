@@ -6,12 +6,10 @@ class GameCore:
         self,
         player_idx: int,
         n_cards: int = 104,
-        seed_offset: int = 42,
-        seed_stride: int = 223,
     ) -> None:
         self.player_idx = player_idx
         self.n_cards = n_cards
-        self.rng = random.Random(seed_offset + seed_stride * (player_idx + 1))
+        self.rng = random.Random()
 
     def card_score(self, card: int) -> int:
         if card % 55 == 0:
