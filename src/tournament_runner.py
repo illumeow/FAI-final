@@ -269,6 +269,11 @@ class CombinationTournamentRunner(BaseTournamentRunner):
         return self.player_stats, matchup_history
 
     def print_standings(self):
+        label_width = max(
+            6,
+            max((len(str(self._player_label(i))) for i in range(len(self.player_configs))), default=0) + 1,
+        )
+
         for p in self.player_stats:
             p["avg_score"] = p["total_score"] / p["games_played"] if p["games_played"] > 0 else float('inf')
             p["avg_rank"] = p["total_rank"] / p["games_played"] if p["games_played"] > 0 else float('inf')
@@ -276,15 +281,18 @@ class CombinationTournamentRunner(BaseTournamentRunner):
         self.player_stats.sort(key=lambda x: (x["avg_rank"], x["avg_score"]))
         
         print(f"\nFinal Standings (Sorted by Avg Rank):")
-        print("-" * 110)
-        print(f"{'Rank':<5} {'ID':<5} {'Class':<22} {'Label':<9} {'Avg Rank':<9} {'Est. Elo':<9} {'Avg Score':<9} {'Games':<6} {'Note':<9}")
-        print("-" * 110)
+        header = (
+            f"{'Rank':<5} {'ID':<5} {'Class':<22} {'Label':<{label_width}} "
+            f"{'Avg Rank':<9} {'Est. Elo':<9} {'Avg Score':<9} {'Games':<6} {'Note':<9}"
+        )
+        print("-" * len(header))
+        print(header)
+        print("-" * len(header))
         
         for i, p in enumerate(self.player_stats):
             p_cls_name = self.player_configs[p["config_idx"]]["class"]
             if len(p_cls_name) > 21: p_cls_name = p_cls_name[:18] + "..."
             label = self._player_label(p["config_idx"])
-            if len(label) > 9: label = label[:9]
             
             notes = []
             if p["dq_count"] > 0: notes.append(f"DQ: {p['dq_count']}")
@@ -293,8 +301,11 @@ class CombinationTournamentRunner(BaseTournamentRunner):
             note_str = " ".join(notes)
             
             elo = p.get("est_elo", 1500)
-            print(f"{i+1:<5} {p['id']:<5} {p_cls_name:<22} {label:<9} {p['avg_rank']:<9.2f} {elo:<9.0f} {p['avg_score']:<9.2f} {p['games_played']:<6} {note_str:<9}")
-        print("-" * 110)
+            print(
+                f"{i+1:<5} {p['id']:<5} {p_cls_name:<22} {label:<{label_width}} "
+                f"{p['avg_rank']:<9.2f} {elo:<9.0f} {p['avg_score']:<9.2f} {p['games_played']:<6} {note_str:<9}"
+            )
+        print("-" * len(header))
 
 
 class RandomPartitionTournamentRunner(BaseTournamentRunner):
@@ -629,6 +640,11 @@ class RandomPartitionTournamentRunner(BaseTournamentRunner):
         return self.player_stats, matchup_history
 
     def print_standings(self):
+        label_width = max(
+            6,
+            max((len(str(self._player_label(i))) for i in range(len(self.player_configs))), default=0) + 1,
+        )
+
         for p in self.player_stats:
             p["avg_score"] = p["total_score"] / p["games_played"] if p["games_played"] > 0 else float('inf')
             p["avg_rank"] = p["total_rank"] / p["games_played"] if p["games_played"] > 0 else float('inf')
@@ -640,19 +656,24 @@ class RandomPartitionTournamentRunner(BaseTournamentRunner):
         self.player_stats.sort(key=lambda x: (x["avg_rank"], x["avg_score"]))
         
         print(f"\nFinal Standings (Sorted by Avg Rank):")
-        line_width = 123 if has_calibrated_score else 110
-        print("-" * line_width)
         if has_calibrated_score:
-            print(f"{'Rank':<5} {'ID':<5} {'Class':<22} {'Label':<9} {'Avg Rank':<9} {'Score':<8} {'Est. Elo':<9} {'Avg Score':<9} {'Games':<6} {'Note':<9}")
+            header = (
+                f"{'Rank':<5} {'ID':<5} {'Class':<22} {'Label':<{label_width}} "
+                f"{'Avg Rank':<9} {'Score':<8} {'Est. Elo':<9} {'Avg Score':<9} {'Games':<6} {'Note':<9}"
+            )
         else:
-            print(f"{'Rank':<5} {'ID':<5} {'Class':<22} {'Label':<9} {'Avg Rank':<9} {'Est. Elo':<9} {'Avg Score':<9} {'Games':<6} {'Note':<9}")
-        print("-" * line_width)
+            header = (
+                f"{'Rank':<5} {'ID':<5} {'Class':<22} {'Label':<{label_width}} "
+                f"{'Avg Rank':<9} {'Est. Elo':<9} {'Avg Score':<9} {'Games':<6} {'Note':<9}"
+            )
+        print("-" * len(header))
+        print(header)
+        print("-" * len(header))
         
         for i, p in enumerate(self.player_stats):
             p_cls_name = self.player_configs[p["config_idx"]]["class"]
             if len(p_cls_name) > 21: p_cls_name = p_cls_name[:18] + "..."
             label = self._player_label(p["config_idx"])
-            if len(label) > 9: label = label[:9]
             
             notes = []
             if p["dq_count"] > 0: notes.append(f"DQ: {p['dq_count']}")
@@ -665,10 +686,16 @@ class RandomPartitionTournamentRunner(BaseTournamentRunner):
             elo = p.get("est_elo", 1500)
             if has_calibrated_score:
                 score_str = f"{p['calibrated_score']:.2f}" if p.get("calibrated_score") is not None and math.isfinite(p["calibrated_score"]) else "-"
-                print(f"{i+1:<5} {p['id']:<5} {p_cls_name:<22} {label:<9} {p['avg_rank']:<9.2f} {score_str:<8} {elo:<9.0f} {p['avg_score']:<9.2f} {p['games_played']:<6} {note_str:<9}")
+                print(
+                    f"{i+1:<5} {p['id']:<5} {p_cls_name:<22} {label:<{label_width}} "
+                    f"{p['avg_rank']:<9.2f} {score_str:<8} {elo:<9.0f} {p['avg_score']:<9.2f} {p['games_played']:<6} {note_str:<9}"
+                )
             else:
-                print(f"{i+1:<5} {p['id']:<5} {p_cls_name:<22} {label:<9} {p['avg_rank']:<9.2f} {elo:<9.0f} {p['avg_score']:<9.2f} {p['games_played']:<6} {note_str:<9}")
-        print("-" * line_width)
+                print(
+                    f"{i+1:<5} {p['id']:<5} {p_cls_name:<22} {label:<{label_width}} "
+                    f"{p['avg_rank']:<9.2f} {elo:<9.0f} {p['avg_score']:<9.2f} {p['games_played']:<6} {note_str:<9}"
+                )
+        print("-" * len(header))
 
 
 class GroupedRandomPartitionTournamentRunner(RandomPartitionTournamentRunner):
@@ -741,18 +768,26 @@ class GroupedRandomPartitionTournamentRunner(RandomPartitionTournamentRunner):
         return self.player_stats, {"stage1": history_1, "stage2": history_2}
 
     def print_standings(self):
+        label_width = max(
+            len("Label") + 1,
+            max((len(str(self._player_label(i))) for i in range(len(self.player_configs))), default=0) + 1,
+        )
+
         self.player_stats.sort(key=lambda x: (x["group_id"], x["avg_rank_2"], x["avg_score_2"]))
         
         print(f"\nFinal Standings (Sorted by Group, then Stage 2 Rank):")
-        print("-" * 132)
-        print(f"{'Grp':<3} {'Rank':<5} {'ID':<5} {'Class':<22} {'Label':<9} {'AvgRk 1':<8} {'AvgRk 2':<8} {'Est. Elo':<9} {'TotalG':<6} {'Note':<9}")
-        print("-" * 132)
+        header = (
+            f"{'Grp':<3} {'Rank':<5} {'ID':<5} {'Class':<22} {'Label':<{label_width}} "
+            f"{'AvgRk 1':<8} {'AvgRk 2':<8} {'Est. Elo':<9} {'TotalG':<6} {'Note':<9}"
+        )
+        print("-" * len(header))
+        print(header)
+        print("-" * len(header))
         
         for i, p in enumerate(self.player_stats):
             p_cls_name = self.player_configs[p["config_idx"]]["class"]
             if len(p_cls_name) > 21: p_cls_name = p_cls_name[:18] + "..."
             label = self._player_label(p["config_idx"])
-            if len(label) > 9: label = label[:9]
             
             notes = []
             if p['id'] >= self.original_num_players: notes.append("(PAD)")
@@ -764,5 +799,8 @@ class GroupedRandomPartitionTournamentRunner(RandomPartitionTournamentRunner):
             note_str = " ".join(notes)
             
             elo = p.get("est_elo", 1500)
-            print(f"{p['group_id']:<3} {i+1:<5} {p['id']:<5} {p_cls_name:<22} {label:<9} {p['avg_rank_1']:<8.2f} {p['avg_rank_2']:<8.2f} {elo:<9.0f} {p['games_played']:<6} {note_str:<9}")
-        print("-" * 132)
+            print(
+                f"{p['group_id']:<3} {i+1:<5} {p['id']:<5} {p_cls_name:<22} {label:<{label_width}} "
+                f"{p['avg_rank_1']:<8.2f} {p['avg_rank_2']:<8.2f} {elo:<9.0f} {p['games_played']:<6} {note_str:<9}"
+            )
+        print("-" * len(header))

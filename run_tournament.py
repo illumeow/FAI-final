@@ -1,5 +1,6 @@
 
 import json
+import math
 import os
 import argparse
 import re
@@ -44,6 +45,66 @@ def compact_json_dumps(data):
         items = [x.strip() for x in content.split(',')]
         return '[' + ', '.join(items) + ']'
     return re.sub(r'\[\s*([^\[\]\{\}]+?)\s*\]', collapse, text)
+
+def _round_or_none(value, digits):
+    if value is None:
+        return None
+    try:
+        if not math.isfinite(value):
+            return None
+    except TypeError:
+        return value
+    return round(value, digits)
+
+def build_readable_standings(runner, final_standings):
+    has_calibrated = any(
+        p.get("calibrated_score") is not None
+        and isinstance(p.get("calibrated_score"), (int, float))
+        and math.isfinite(p["calibrated_score"])
+        for p in final_standings
+    )
+    has_grouped = any("group_id" in p for p in final_standings)
+
+    if has_grouped:
+        sorted_stats = sorted(
+            final_standings,
+            key=lambda x: (x.get("group_id", -1), x.get("avg_rank_2", float('inf')), x.get("avg_score_2", float('inf'))),
+        )
+    else:
+        sorted_stats = sorted(
+            final_standings,
+            key=lambda x: (x.get("avg_rank", float('inf')), x.get("avg_score", float('inf'))),
+        )
+
+    note_keys = ("dq_count", "timeout_count", "exception_count", "err_oom_count", "err_generic_count")
+
+    out = []
+    for i, p in enumerate(sorted_stats):
+        cfg = runner.player_configs[p["config_idx"]]
+        entry = {
+            "rank": i + 1,
+            "id": p["id"],
+            "label": cfg.get("label", "-"),
+            "class": cfg.get("class", "-"),
+            "avg_rank": _round_or_none(p.get("avg_rank"), 4),
+            "avg_score": _round_or_none(p.get("avg_score"), 4),
+            "est_elo": _round_or_none(p.get("est_elo"), 1),
+            "games_played": p.get("games_played", 0),
+            "is_baseline": p.get("is_baseline", False),
+        }
+        if has_calibrated:
+            entry["calibrated_score"] = _round_or_none(p.get("calibrated_score"), 2)
+        if has_grouped:
+            entry["group_id"] = p.get("group_id")
+            entry["avg_rank_1"] = _round_or_none(p.get("avg_rank_1"), 4)
+            entry["avg_rank_2"] = _round_or_none(p.get("avg_rank_2"), 4)
+            entry["avg_score_1"] = _round_or_none(p.get("avg_score_1"), 4)
+            entry["avg_score_2"] = _round_or_none(p.get("avg_score_2"), 4)
+        notes = {k: p[k] for k in note_keys if p.get(k, 0) > 0}
+        if notes:
+            entry["notes"] = notes
+        out.append(entry)
+    return out
 
 def load_config(config_path):
     try:
@@ -131,6 +192,18 @@ def run():
         print("Save successful.")
     except Exception as e:
         print(f"Error saving results: {e}")
+
+    # Also save a human-readable standings-only file alongside the full results.
+    standings_filename = f"{timestamp}_{config_name}_standings.json"
+    standings_file = os.path.join(results_dir, standings_filename)
+    print(f"Saving standings summary to {standings_file}...")
+    try:
+        readable_standings = build_readable_standings(runner, final_standings)
+        with open(standings_file, 'w') as f:
+            json.dump(readable_standings, f, indent=2)
+        print("Standings save successful.")
+    except Exception as e:
+        print(f"Error saving standings: {e}")
 
 if __name__ == "__main__":
     run()
