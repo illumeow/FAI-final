@@ -3,7 +3,7 @@
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr_plus"],
         ["src.players.agents.cfr_player", "CFRPlayer", {}, "cfr"],
         ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"]
+        ["src.players.unused.simulation_player", "SimulationPlayer", {}, "simulation"]
     ],
     "engine": {
         "n_players": 4,

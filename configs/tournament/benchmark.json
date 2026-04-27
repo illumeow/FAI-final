@@ -7,17 +7,15 @@
         ["src.players.TA.public_baselines1", "Baseline5", {}, "B5"]
     ],
     "players": [
-        ["src.players.TA.random_player", "RandomPlayer", {}, "random"],
-        ["src.players.unused.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
-        ["src.players.unused.bitwise_search_player", "BitwiseSearchPlayer", {}, "bitwise"],
-        ["src.players.unused.cfr_player", "CFRPlayer", {}, "cfr"],
-        ["src.players.unused.expectimax_player", "ExpectimaxPlayer", {}, "expectimax"],
-        ["src.players.unused.heuristic_player", "HeuristicPlayer", {}, "heuristic"],
-        ["src.players.unused.min_player", "MinPlayer", {}, "min"],
-        ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"],
-        ["src.players.agents.v1.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+ v1"],
-        ["src.players.agents.v1.simulation_player", "SimulationPlayer", {}, "sim v1"]
+        ["src.players.others.cmj", "CMJ", {}, "cmj"],
+        ["src.players.others.CYHuang", "CYhuang", {}, "CYhuang"],
+        ["src.players.others.CYHuang2", "CYhuang2", {}, "CYhuang2"],
+        ["src.players.others.penguin5728", "penguin5728", {}, "penguin"],
+        ["src.players.others.Qwertypig", "Qwertypig", {}, "Qwertypig"],
+        ["src.players.others.Qwertyswine", "Qwertyswine", {}, "Qwertyswine"],
+        ["src.players.others.takagi1218", "takagi1218", {}, "takagi"],
+        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "illu sim"],
+        ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "illu CFR+"]
     ],
     "engine": {
         "n_players": 4,
@@ -29,13 +27,7 @@
     "tournament": {
         "type": "random_partition",
         "duplication_mode": "cycle",
-        "num_games_per_player": 4000,
-        "num_workers": 40,
-        "scoring": {
-            "baseline_upper_pct": 0.8,
-            "baseline_lower_pct": 0.2,
-            "score_at_upper_pct": 80,
-            "score_at_lower_pct": 20
-        }
+        "num_games_per_player": 3000,
+        "num_workers": 30
     }
 }

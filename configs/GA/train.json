@@ -48,7 +48,7 @@
         "candidate_label": "ga_candidate",
         "opponents": [
             ["src.players.agents.bandit_rollout_player", "BanditRolloutPlayer", {}, "bandit"],
-            ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"],
+            ["src.players.unused.simulation_player", "SimulationPlayer", {}, "simulation"],
             ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"]
         ],
         "engine": {
