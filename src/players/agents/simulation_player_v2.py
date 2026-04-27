@@ -3,10 +3,11 @@ import random
 import time
 from typing import Any
 
-from .game_core import GameCore
+
+_N_CARDS = 104
 
 
-def _build_card_score_table(n_cards: int = 104) -> list[int]:
+def _build_card_score_table(n_cards: int = _N_CARDS) -> list[int]:
     table = [0] * (n_cards + 1)
     for c in range(1, n_cards + 1):
         if c % 55 == 0:
@@ -93,12 +94,26 @@ def _greedy_pick(hand: list[int], board: list[list[int]], row_sums: list[int]) -
     return min(hand, key=lambda c: _heuristic_key(board, row_sums, c))
 
 
+def _build_unseen_pool(
+    hand: list[int], history: dict[str, Any], n_cards: int = _N_CARDS
+) -> list[int]:
+    known = set(hand)
+    for row in history["board"]:
+        known.update(row)
+    for past_action in history["history_matrix"]:
+        known.update(past_action)
+    for past_board in history["board_history"]:
+        for row in past_board:
+            known.update(row)
+    return [c for c in range(1, n_cards + 1) if c not in known]
+
+
 def _sample_opp_hands(
     rng: random.Random,
     unseen: list[int],
     n_opponents: int,
     rounds_left: int,
-    n_cards: int = 104,
+    n_cards: int = _N_CARDS,
 ) -> list[list[int]]:
     needed = n_opponents * rounds_left
     if needed == 0:
@@ -156,7 +171,6 @@ class SimulationPlayerV2:
 
     def __init__(self, player_idx: int) -> None:
         self.player_idx = player_idx
-        self.core = GameCore(player_idx)
         self.rng = random.Random()
         self.time_budget_sec = 0.92
         self.min_paired_iters = 2
@@ -172,7 +186,7 @@ class SimulationPlayerV2:
         n_players = len(history["scores"])
         n_opponents = n_players - 1
         rounds_left = len(hand)
-        unseen = self.core.build_unseen_pool(hand, history)
+        unseen = _build_unseen_pool(hand, history)
 
         candidates: list[int] = list(hand)
         totals: dict[int, float] = {c: 0.0 for c in candidates}
