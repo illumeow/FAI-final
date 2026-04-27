@@ -173,8 +173,8 @@ class SimulationPlayerV2:
         self.player_idx = player_idx
         self.rng = random.Random()
         self.time_budget_sec = 0.92
-        self.min_paired_iters = 2
-        self.ucb_c = 2.0
+        self.min_paired_iters = 4
+        self.ucb_c = 7.0
 
     def action(self, hand: list[int], history: dict[str, Any]) -> int:
         if len(hand) == 1:

@@ -9,8 +9,9 @@
     "players": [
         ["src.players.unused.cfr_player", "CFRPlayer", {}, "cfr"],
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "simulation"],
-        ["src.players.agents.simulation_player_v2", "SimulationPlayerV2", {}, "simulation v2"]
+        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "sim v1"],
+        ["src.players.agents.simulation_player_v2", "SimulationPlayerV2", {}, "sim v2 tuned"],
+        ["src.players.agents.simulation_player_v3", "SimulationPlayerV3", {}, "sim v3"]
     ],
     "engine": {
         "n_players": 4,
@@ -23,12 +24,6 @@
         "type": "random_partition",
         "duplication_mode": "cycle",
         "num_games_per_player": 500,
-        "num_workers": 40,
-        "scoring": {
-            "baseline_upper_pct": 0.8,
-            "baseline_lower_pct": 0.2,
-            "score_at_upper_pct": 80,
-            "score_at_lower_pct": 20
-        }
+        "num_workers": 40
     }
 }

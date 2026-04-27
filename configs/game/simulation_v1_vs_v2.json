@@ -1,0 +1,16 @@
+{
+    "players": [
+        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "sim_v1"],
+        ["src.players.agents.simulation_player_v2", "SimulationPlayerV2", {}, "sim_v2"],
+        ["src.players.agents.simulation_player_v3", "SimulationPlayerV3", {}, "sim_v3"],
+        ["src.players.TA.random_player", "RandomPlayer", {}, "random"]
+    ],
+    "engine": {
+        "n_players": 4,
+        "n_rounds": 10,
+        "verbose": false,
+        "timeout": 1.0,
+        "timeout_buffer": 0.5
+    },
+    "num_games": 1
+}
