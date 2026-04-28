@@ -22,6 +22,6 @@
         "type": "random_partition",
         "duplication_mode": "cycle",
         "num_games_per_player": 500,
-        "num_workers": 40
+        "num_workers": 30
     }
 }
