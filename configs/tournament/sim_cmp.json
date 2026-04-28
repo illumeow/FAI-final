@@ -1,5 +1,6 @@
 {
     "baselines": [
+        ["src.players.TA.public_baselines1", "Baseline1", {}, "B1"],
         ["src.players.TA.public_baselines1", "Baseline2", {}, "B2"],
         ["src.players.TA.public_baselines1", "Baseline3", {}, "B3"],
         ["src.players.TA.public_baselines1", "Baseline4", {}, "B4"],
@@ -7,9 +8,8 @@
     ],
     "players": [
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"endgame_threshold": 0}, "sim no endgame"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"endgame_threshold": 2}, "sim endgame 2"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"endgame_threshold": 4}, "sim endgame 4"]
+        ["src.players.agents.simulation_player", "SimulationPlayer", {"heuristic_variant": 0}, "sim h0"],
+        ["src.players.agents.simulation_player", "SimulationPlayer", {"heuristic_variant": 1}, "sim h1"]
     ],
     "engine": {
         "n_players": 4,
