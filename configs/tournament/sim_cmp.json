@@ -9,7 +9,7 @@
     "players": [
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
         ["src.players.agents.simulation_player", "SimulationPlayer", {"heuristic_variant": 0}, "sim h0"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"heuristic_variant": 1}, "sim h1"]
+        ["src.players.agents.simulation_player", "SimulationPlayer", {"heuristic_variant": 2}, "sim h2"]
     ],
     "engine": {
         "n_players": 4,

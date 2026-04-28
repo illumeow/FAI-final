@@ -92,7 +92,18 @@ def _heuristic_key(
         score = row_sums[best_idx] if row_len >= 5 else 0
         return (score, 0, delta, new_len, card)
 
-    # variant >= 1: quadratic danger ramp, scaled by row penalty.
+    if variant == 2:
+        # Minimum-touch: same tuple structure as v0, but add a soft penalty
+        # for loading the bomb (new_len=5). Keeps delta as primary discriminator.
+        if row_len >= 5:
+            score = row_sums[best_idx]
+        elif row_len == 4:
+            score = row_sums[best_idx] // 4
+        else:
+            score = 0
+        return (score, 0, delta, new_len, card)
+
+    # variant 1: quadratic danger ramp, scaled by row penalty.
     # new_len=2→4%, 3→16%, 4→36%, 5→64% (loaded), 6→100% (take triggers).
     danger = row_sums[best_idx] * (new_len - 1) * (new_len - 1) // 25
     return (danger, 0, delta, new_len, card)
