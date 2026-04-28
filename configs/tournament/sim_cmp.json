@@ -1,16 +1,15 @@
 {
     "baselines": [
-        ["src.players.TA.public_baselines1", "Baseline1", {}, "B1"],
         ["src.players.TA.public_baselines1", "Baseline2", {}, "B2"],
         ["src.players.TA.public_baselines1", "Baseline3", {}, "B3"],
         ["src.players.TA.public_baselines1", "Baseline4", {}, "B4"],
         ["src.players.TA.public_baselines1", "Baseline5", {}, "B5"]
     ],
     "players": [
-        ["src.players.unused.cfr_player", "CFRPlayer", {}, "cfr"],
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
-        ["src.players.unused.simulation_player", "SimulationPlayer", {}, "sim v1"],
-        ["src.players.agents.simulation_player_v2", "SimulationPlayerV2", {}, "sim v2"]
+        ["src.players.agents.simulation_player", "SimulationPlayer", {"endgame_threshold": 0}, "sim no endgame"],
+        ["src.players.agents.simulation_player", "SimulationPlayer", {"endgame_threshold": 2}, "sim endgame 2"],
+        ["src.players.agents.simulation_player", "SimulationPlayer", {"endgame_threshold": 4}, "sim endgame 4"]
     ],
     "engine": {
         "n_players": 4,

@@ -127,40 +127,94 @@ def _sample_opp_hands(
     return [sampled[i * rounds_left : (i + 1) * rounds_left] for i in range(n_opponents)]
 
 
+def _simulate_one_round_inplace(
+    board: list[list[int]],
+    row_sums: list[int],
+    my_card: int,
+    opp_remaining: list[list[int]],
+    my_pid: int,
+) -> int:
+    played: list[tuple[int, int]] = [(my_card, my_pid)]
+    for i, opp_hand in enumerate(opp_remaining):
+        if not opp_hand:
+            continue
+        opp_card = _greedy_pick(opp_hand, board, row_sums)
+        opp_hand.remove(opp_card)
+        played.append((opp_card, -1000 - i))
+
+    played.sort(key=lambda x: x[0])
+    my_total = 0
+    for card, pid in played:
+        gained = _place_card(board, row_sums, card)
+        if pid == my_pid:
+            my_total += gained
+    return my_total
+
+
+def _endgame_best_response(
+    board: list[list[int]],
+    row_sums: list[int],
+    my_remaining: list[int],
+    opp_remaining: list[list[int]],
+    my_pid: int,
+) -> int:
+    if not my_remaining:
+        return 0
+    if len(my_remaining) == 1:
+        b = [row.copy() for row in board]
+        rs = row_sums.copy()
+        opps = [h.copy() for h in opp_remaining]
+        return _simulate_one_round_inplace(b, rs, my_remaining[0], opps, my_pid)
+
+    best = -1
+    for idx, my_card in enumerate(my_remaining):
+        b = [row.copy() for row in board]
+        rs = row_sums.copy()
+        opps = [h.copy() for h in opp_remaining]
+        gained = _simulate_one_round_inplace(b, rs, my_card, opps, my_pid)
+        sub_my = my_remaining[:idx] + my_remaining[idx + 1 :]
+        future = _endgame_best_response(b, rs, sub_my, opps, my_pid)
+        total = gained + future
+        if idx == 0 or total < best:
+            best = total
+    return best
+
+
 def _rollout_total_score(
     board: list[list[int]],
     my_hand: list[int],
     fixed_first_card: int,
     opp_hands: list[list[int]],
     my_pid: int,
+    endgame_threshold: int = 4,
 ) -> int:
     sim_board = [row.copy() for row in board]
     row_sums = _row_sums_from_board(sim_board)
     my_remaining = my_hand.copy()
+    my_remaining.remove(fixed_first_card)
     opp_remaining = [h.copy() for h in opp_hands]
 
     rounds_left = len(my_hand)
-    my_total_score = 0
+    my_total = _simulate_one_round_inplace(
+        sim_board, row_sums, fixed_first_card, opp_remaining, my_pid
+    )
 
-    for r in range(rounds_left):
-        my_card = fixed_first_card if r == 0 else _greedy_pick(my_remaining, sim_board, row_sums)
+    if rounds_left == 1:
+        return my_total
+
+    if rounds_left <= endgame_threshold:
+        my_total += _endgame_best_response(
+            sim_board, row_sums, my_remaining, opp_remaining, my_pid
+        )
+        return my_total
+
+    for _ in range(rounds_left - 1):
+        my_card = _greedy_pick(my_remaining, sim_board, row_sums)
         my_remaining.remove(my_card)
-
-        played: list[tuple[int, int]] = [(my_card, my_pid)]
-        for i, opp_hand in enumerate(opp_remaining):
-            if not opp_hand:
-                continue
-            opp_card = _greedy_pick(opp_hand, sim_board, row_sums)
-            opp_hand.remove(opp_card)
-            played.append((opp_card, -1000 - i))
-
-        played.sort(key=lambda x: x[0])
-        for card, pid in played:
-            gained = _place_card(sim_board, row_sums, card)
-            if pid == my_pid:
-                my_total_score += gained
-
-    return my_total_score
+        my_total += _simulate_one_round_inplace(
+            sim_board, row_sums, my_card, opp_remaining, my_pid
+        )
+    return my_total
 
 
 class SimulationPlayer:
@@ -169,12 +223,13 @@ class SimulationPlayer:
     followed by UCB1-style allocation on the remaining budget.
     """
 
-    def __init__(self, player_idx: int) -> None:
+    def __init__(self, player_idx: int, endgame_threshold: int = 4) -> None:
         self.player_idx = player_idx
         self.rng = random.Random()
         self.time_budget_sec = 0.92
         self.min_paired_iters = 4
         self.ucb_c = 7.0
+        self.endgame_threshold = endgame_threshold
 
     def action(self, hand: list[int], history: dict[str, Any]) -> int:
         if len(hand) == 1:
@@ -201,7 +256,9 @@ class SimulationPlayer:
             for c in candidates:
                 if time.perf_counter() >= deadline:
                     break
-                totals[c] += _rollout_total_score(board, hand, c, opp_hands, my_pid)
+                totals[c] += _rollout_total_score(
+                    board, hand, c, opp_hands, my_pid, self.endgame_threshold
+                )
                 counts[c] += 1
 
         # Phase 2 (UCB1): minimize penalty → pick the lowest LCB candidate.
@@ -216,7 +273,9 @@ class SimulationPlayer:
                 - ucb_c * math.sqrt(log_total / counts[c]),
             )
             opp_hands = _sample_opp_hands(self.rng, unseen, n_opponents, rounds_left)
-            totals[chosen] += _rollout_total_score(board, hand, chosen, opp_hands, my_pid)
+            totals[chosen] += _rollout_total_score(
+                board, hand, chosen, opp_hands, my_pid, self.endgame_threshold
+            )
             counts[chosen] += 1
             total_pulls += 1
 
