@@ -1,5 +1,6 @@
 **/__pycache__/
 results
-data
+
+# AI agent files
 .github/
 CLAUDE.md
