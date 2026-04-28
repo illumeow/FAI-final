@@ -5,6 +5,8 @@ from typing import Any
 
 
 _N_CARDS = 104
+_N_ROWS = 4
+_N_OPPONENTS = 3
 
 
 def _build_card_score_table(n_cards: int = _N_CARDS) -> list[int]:
@@ -51,7 +53,7 @@ def _place_card(board: list[list[int]], row_sums: list[int], card: int) -> int:
 
     force_take_idx = 0
     best_key = (row_sums[0], len(board[0]), 0)
-    for i in range(1, len(board)):
+    for i in range(1, _N_ROWS):
         k = (row_sums[i], len(board[i]), i)
         if k < best_key:
             best_key = k
@@ -64,7 +66,7 @@ def _place_card(board: list[list[int]], row_sums: list[int], card: int) -> int:
 
 
 def _heuristic_key(
-    board: list[list[int]], row_sums: list[int], card: int, variant: int = 0
+    board: list[list[int]], row_sums: list[int], card: int
 ) -> tuple[int, int, int, int, int]:
     best_idx = -1
     best_last = -1
@@ -77,7 +79,7 @@ def _heuristic_key(
     if best_idx == -1:
         force_take_idx = 0
         best_key = (row_sums[0], len(board[0]), 0)
-        for i in range(1, len(board)):
+        for i in range(1, _N_ROWS):
             k = (row_sums[i], len(board[i]), i)
             if k < best_key:
                 best_key = k
@@ -86,33 +88,48 @@ def _heuristic_key(
 
     delta = card - board[best_idx][-1]
     row_len = len(board[best_idx])
-    new_len = row_len + 1
+    score = row_sums[best_idx] if row_len >= 5 else 0
+    return (score, 0, delta, row_len + 1, card)
 
-    if variant == 0:
-        score = row_sums[best_idx] if row_len >= 5 else 0
-        return (score, 0, delta, new_len, card)
 
-    if variant == 2:
-        # Minimum-touch: same tuple structure as v0, but add a soft penalty
-        # for loading the bomb (new_len=5). Keeps delta as primary discriminator.
-        if row_len >= 5:
-            score = row_sums[best_idx]
-        elif row_len == 4:
-            score = row_sums[best_idx] // 4
+def _greedy_pick(hand: list[int], board: list[list[int]], row_sums: list[int]) -> int:
+    # Hot path. Inlines _heuristic_key and hoists row state — the board is
+    # fixed while picking, so per-card recomputation of row[-1], len(row),
+    # and the force-take row was wasteful. ~50% rollout speedup.
+    row_last = [r[-1] for r in board]
+    row_len = [len(r) for r in board]
+
+    ft_idx = 0
+    ft_tiebreak = (row_sums[0], row_len[0], 0)
+    for i in range(1, _N_ROWS):
+        k = (row_sums[i], row_len[i], i)
+        if k < ft_tiebreak:
+            ft_tiebreak = k
+            ft_idx = i
+    ft_score = row_sums[ft_idx]
+
+    best_card = hand[0]
+    best_kkey: tuple[int, int, int, int, int] | None = None
+    for card in hand:
+        best_idx = -1
+        best_last = -1
+        for i, last in enumerate(row_last):
+            if last < card and last > best_last:
+                best_last = last
+                best_idx = i
+
+        if best_idx == -1:
+            kkey = (ft_score, 1, 1_000_000, 1, card)
         else:
-            score = 0
-        return (score, 0, delta, new_len, card)
+            rl = row_len[best_idx]
+            score = row_sums[best_idx] if rl >= 5 else 0
+            kkey = (score, 0, card - best_last, rl + 1, card)
 
-    # variant 1: quadratic danger ramp, scaled by row penalty.
-    # new_len=2→4%, 3→16%, 4→36%, 5→64% (loaded), 6→100% (take triggers).
-    danger = row_sums[best_idx] * (new_len - 1) * (new_len - 1) // 25
-    return (danger, 0, delta, new_len, card)
+        if best_kkey is None or kkey < best_kkey:
+            best_kkey = kkey
+            best_card = card
 
-
-def _greedy_pick(
-    hand: list[int], board: list[list[int]], row_sums: list[int], variant: int = 0
-) -> int:
-    return min(hand, key=lambda c: _heuristic_key(board, row_sums, c, variant))
+    return best_card
 
 
 def _build_unseen_pool(
@@ -154,13 +171,12 @@ def _simulate_one_round_inplace(
     my_card: int,
     opp_remaining: list[list[int]],
     my_pid: int,
-    variant: int = 0,
 ) -> int:
     played: list[tuple[int, int]] = [(my_card, my_pid)]
     for i, opp_hand in enumerate(opp_remaining):
         if not opp_hand:
             continue
-        opp_card = _greedy_pick(opp_hand, board, row_sums, variant)
+        opp_card = _greedy_pick(opp_hand, board, row_sums)
         opp_hand.remove(opp_card)
         played.append((opp_card, -1000 - i))
 
@@ -179,7 +195,6 @@ def _endgame_best_response(
     my_remaining: list[int],
     opp_remaining: list[list[int]],
     my_pid: int,
-    variant: int = 0,
 ) -> int:
     if not my_remaining:
         return 0
@@ -187,16 +202,16 @@ def _endgame_best_response(
         b = [row.copy() for row in board]
         rs = row_sums.copy()
         opps = [h.copy() for h in opp_remaining]
-        return _simulate_one_round_inplace(b, rs, my_remaining[0], opps, my_pid, variant)
+        return _simulate_one_round_inplace(b, rs, my_remaining[0], opps, my_pid)
 
     best = -1
     for idx, my_card in enumerate(my_remaining):
         b = [row.copy() for row in board]
         rs = row_sums.copy()
         opps = [h.copy() for h in opp_remaining]
-        gained = _simulate_one_round_inplace(b, rs, my_card, opps, my_pid, variant)
+        gained = _simulate_one_round_inplace(b, rs, my_card, opps, my_pid)
         sub_my = my_remaining[:idx] + my_remaining[idx + 1 :]
-        future = _endgame_best_response(b, rs, sub_my, opps, my_pid, variant)
+        future = _endgame_best_response(b, rs, sub_my, opps, my_pid)
         total = gained + future
         if idx == 0 or total < best:
             best = total
@@ -210,7 +225,6 @@ def _rollout_total_score(
     opp_hands: list[list[int]],
     my_pid: int,
     endgame_threshold: int = 4,
-    variant: int = 0,
 ) -> int:
     sim_board = [row.copy() for row in board]
     row_sums = _row_sums_from_board(sim_board)
@@ -220,7 +234,7 @@ def _rollout_total_score(
 
     rounds_left = len(my_hand)
     my_total = _simulate_one_round_inplace(
-        sim_board, row_sums, fixed_first_card, opp_remaining, my_pid, variant
+        sim_board, row_sums, fixed_first_card, opp_remaining, my_pid
     )
 
     if rounds_left == 1:
@@ -228,15 +242,15 @@ def _rollout_total_score(
 
     if rounds_left <= endgame_threshold:
         my_total += _endgame_best_response(
-            sim_board, row_sums, my_remaining, opp_remaining, my_pid, variant
+            sim_board, row_sums, my_remaining, opp_remaining, my_pid
         )
         return my_total
 
     for _ in range(rounds_left - 1):
-        my_card = _greedy_pick(my_remaining, sim_board, row_sums, variant)
+        my_card = _greedy_pick(my_remaining, sim_board, row_sums)
         my_remaining.remove(my_card)
         my_total += _simulate_one_round_inplace(
-            sim_board, row_sums, my_card, opp_remaining, my_pid, variant
+            sim_board, row_sums, my_card, opp_remaining, my_pid
         )
     return my_total
 
@@ -247,19 +261,13 @@ class SimulationPlayer:
     followed by UCB1-style allocation on the remaining budget.
     """
 
-    def __init__(
-        self,
-        player_idx: int,
-        endgame_threshold: int = 4,
-        heuristic_variant: int = 0,
-    ) -> None:
+    def __init__(self, player_idx: int, ucb_c: float = 7.0, endgame_threshold: int = 4) -> None:
         self.player_idx = player_idx
         self.rng = random.Random()
-        self.time_budget_sec = 0.92
+        self.time_budget_sec = 0.95
         self.min_paired_iters = 4
-        self.ucb_c = 7.0
+        self.ucb_c = ucb_c
         self.endgame_threshold = endgame_threshold
-        self.heuristic_variant = heuristic_variant
 
     def action(self, hand: list[int], history: dict[str, Any]) -> int:
         if len(hand) == 1:
@@ -268,8 +276,6 @@ class SimulationPlayer:
         deadline = time.perf_counter() + self.time_budget_sec
 
         board = history["board"]
-        n_players = len(history["scores"])
-        n_opponents = n_players - 1
         rounds_left = len(hand)
         unseen = _build_unseen_pool(hand, history)
 
@@ -282,13 +288,12 @@ class SimulationPlayer:
         for _ in range(self.min_paired_iters):
             if time.perf_counter() >= deadline:
                 break
-            opp_hands = _sample_opp_hands(self.rng, unseen, n_opponents, rounds_left)
+            opp_hands = _sample_opp_hands(self.rng, unseen, _N_OPPONENTS, rounds_left)
             for c in candidates:
                 if time.perf_counter() >= deadline:
                     break
                 totals[c] += _rollout_total_score(
-                    board, hand, c, opp_hands, my_pid,
-                    self.endgame_threshold, self.heuristic_variant,
+                    board, hand, c, opp_hands, my_pid, self.endgame_threshold
                 )
                 counts[c] += 1
 
@@ -303,10 +308,9 @@ class SimulationPlayer:
                 key=lambda c: totals[c] / counts[c]
                 - ucb_c * math.sqrt(log_total / counts[c]),
             )
-            opp_hands = _sample_opp_hands(self.rng, unseen, n_opponents, rounds_left)
+            opp_hands = _sample_opp_hands(self.rng, unseen, _N_OPPONENTS, rounds_left)
             totals[chosen] += _rollout_total_score(
-                board, hand, chosen, opp_hands, my_pid,
-                self.endgame_threshold, self.heuristic_variant,
+                board, hand, chosen, opp_hands, my_pid, self.endgame_threshold
             )
             counts[chosen] += 1
             total_pulls += 1
@@ -316,6 +320,6 @@ class SimulationPlayer:
             candidates,
             key=lambda c: (
                 totals[c] / counts[c] if counts[c] > 0 else float("inf"),
-                _heuristic_key(board, row_sums_now, c, self.heuristic_variant),
+                _heuristic_key(board, row_sums_now, c),
             ),
         )
