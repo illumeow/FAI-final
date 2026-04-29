@@ -235,17 +235,55 @@ def _sample_opp_hands(
     n_opponents: int,
     rounds_left: int,
     n_cards: int = _N_CARDS,
+    opp_weights: list[list[float] | None] | None = None,
 ) -> list[list[int]]:
     needed = n_opponents * rounds_left
     if needed == 0:
         return []
-    if len(unseen) >= needed:
-        sampled = rng.sample(unseen, needed)
-    elif unseen:
-        sampled = [rng.choice(unseen) for _ in range(needed)]
-    else:
-        sampled = [rng.randint(1, n_cards) for _ in range(needed)]
-    return [sampled[i * rounds_left : (i + 1) * rounds_left] for i in range(n_opponents)]
+    if opp_weights is None:
+        if len(unseen) >= needed:
+            sampled = rng.sample(unseen, needed)
+        elif unseen:
+            sampled = [rng.choice(unseen) for _ in range(needed)]
+        else:
+            sampled = [rng.randint(1, n_cards) for _ in range(needed)]
+        return [sampled[i * rounds_left : (i + 1) * rounds_left] for i in range(n_opponents)]
+
+    # Per-opp Gaussian-weighted sampling without replacement. opp_weights[i]
+    # is parallel to `unseen` (None → uniform fallback for that opp).
+    pool = list(unseen)
+    weights_per_opp = [list(w) if w is not None else None for w in opp_weights]
+    hands: list[list[int]] = []
+    for i in range(n_opponents):
+        w = weights_per_opp[i]
+        hand: list[int] = []
+        if w is None or not pool:
+            if len(pool) >= rounds_left:
+                hand = rng.sample(pool, rounds_left)
+                for c in hand:
+                    idx = pool.index(c)
+                    pool.pop(idx)
+                    for ow in weights_per_opp:
+                        if ow is not None:
+                            ow.pop(idx)
+            elif pool:
+                hand = [rng.choice(pool) for _ in range(rounds_left)]
+            else:
+                hand = [rng.randint(1, n_cards) for _ in range(rounds_left)]
+            hands.append(hand)
+            continue
+
+        for _ in range(min(rounds_left, len(pool))):
+            idx = rng.choices(range(len(pool)), weights=w, k=1)[0]
+            hand.append(pool[idx])
+            pool.pop(idx)
+            for ow in weights_per_opp:
+                if ow is not None:
+                    ow.pop(idx)
+        while len(hand) < rounds_left:
+            hand.append(rng.randint(1, n_cards))
+        hands.append(hand)
+    return hands
 
 
 def _simulate_one_round_inplace(
@@ -255,6 +293,7 @@ def _simulate_one_round_inplace(
     opp_remaining: list[list[int]],
     my_pid: int,
     opp_lookahead: bool = False,
+    phantom_my_card: int = -1,
 ) -> int:
     if opp_lookahead:
         n_opp = len(opp_remaining)
@@ -265,12 +304,15 @@ def _simulate_one_round_inplace(
             if h:
                 greedy_picks[i] = _greedy_pick(h, board, row_sums)
         # Second pass: each opp picks via 1-ply best response against the other
-        # opps' greedy picks. My card is excluded from their planning set.
+        # opps' greedy picks. My card is excluded from their planning set unless
+        # phantom_my_card is provided (a stand-in independent of my actual card).
         final_picks: list[int] = [-1] * n_opp
         for i, h in enumerate(opp_remaining):
             if not h:
                 continue
             others = [greedy_picks[j] for j in range(n_opp) if j != i and greedy_picks[j] != -1]
+            if phantom_my_card != -1:
+                others.append(phantom_my_card)
             final_picks[i] = _lookahead_pick(h, board, row_sums, others)
 
         played: list[tuple[int, int]] = [(my_card, my_pid)]
@@ -305,6 +347,7 @@ def _endgame_best_response(
     opp_remaining: list[list[int]],
     my_pid: int,
     opp_lookahead: bool = False,
+    use_phantom: bool = False,
 ) -> int:
     if not my_remaining:
         return 0
@@ -312,16 +355,24 @@ def _endgame_best_response(
         b = [row.copy() for row in board]
         rs = row_sums.copy()
         opps = [h.copy() for h in opp_remaining]
-        return _simulate_one_round_inplace(b, rs, my_remaining[0], opps, my_pid, opp_lookahead)
+        # Single card left: opps could see it without bias (no candidate to compare against).
+        phantom = my_remaining[0] if use_phantom else -1
+        return _simulate_one_round_inplace(b, rs, my_remaining[0], opps, my_pid, opp_lookahead, phantom)
 
     best = -1
     for idx, my_card in enumerate(my_remaining):
         b = [row.copy() for row in board]
         rs = row_sums.copy()
         opps = [h.copy() for h in opp_remaining]
-        gained = _simulate_one_round_inplace(b, rs, my_card, opps, my_pid, opp_lookahead)
+        # Phantom = a sibling card from my_remaining (NOT my_card), so candidates
+        # are evaluated against the same opp policy.
+        if use_phantom:
+            phantom = my_remaining[(idx + 1) % len(my_remaining)]
+        else:
+            phantom = -1
+        gained = _simulate_one_round_inplace(b, rs, my_card, opps, my_pid, opp_lookahead, phantom)
         sub_my = my_remaining[:idx] + my_remaining[idx + 1 :]
-        future = _endgame_best_response(b, rs, sub_my, opps, my_pid, opp_lookahead)
+        future = _endgame_best_response(b, rs, sub_my, opps, my_pid, opp_lookahead, use_phantom)
         total = gained + future
         if idx == 0 or total < best:
             best = total
@@ -336,6 +387,8 @@ def _rollout_total_score(
     my_pid: int,
     endgame_threshold: int = 4,
     opp_lookahead: bool = False,
+    use_phantom: bool = False,
+    phantom_round1: int = -1,
 ) -> int:
     sim_board = [row.copy() for row in board]
     row_sums = _row_sums_from_board(sim_board)
@@ -345,7 +398,8 @@ def _rollout_total_score(
 
     rounds_left = len(my_hand)
     my_total = _simulate_one_round_inplace(
-        sim_board, row_sums, fixed_first_card, opp_remaining, my_pid, opp_lookahead
+        sim_board, row_sums, fixed_first_card, opp_remaining, my_pid, opp_lookahead,
+        phantom_round1 if use_phantom else -1,
     )
 
     if rounds_left == 1:
@@ -353,15 +407,18 @@ def _rollout_total_score(
 
     if rounds_left <= endgame_threshold:
         my_total += _endgame_best_response(
-            sim_board, row_sums, my_remaining, opp_remaining, my_pid, opp_lookahead
+            sim_board, row_sums, my_remaining, opp_remaining, my_pid, opp_lookahead, use_phantom
         )
         return my_total
 
     for _ in range(rounds_left - 1):
         my_card = _greedy_pick(my_remaining, sim_board, row_sums)
         my_remaining.remove(my_card)
+        # Rounds 2+ are determined by greedy regardless of fixed_first_card,
+        # so opps seeing my actual card here doesn't bias the comparison.
         my_total += _simulate_one_round_inplace(
-            sim_board, row_sums, my_card, opp_remaining, my_pid, opp_lookahead
+            sim_board, row_sums, my_card, opp_remaining, my_pid, opp_lookahead,
+            my_card if use_phantom else -1,
         )
     return my_total
 
@@ -378,6 +435,9 @@ class SimulationPlayer:
         ucb_c: float = 7.0,
         endgame_threshold: int = 4,
         opp_lookahead: bool = True,
+        opp_weighted_sampling: bool = False,
+        opp_lookahead_phantom: bool = False,
+        weight_sigma: float = 20.0,
     ) -> None:
         self.player_idx = player_idx
         self.rng = random.Random()
@@ -386,6 +446,9 @@ class SimulationPlayer:
         self.ucb_c = ucb_c
         self.endgame_threshold = endgame_threshold
         self.opp_lookahead = opp_lookahead
+        self.opp_weighted_sampling = opp_weighted_sampling
+        self.opp_lookahead_phantom = opp_lookahead_phantom
+        self.weight_sigma = weight_sigma
 
     def action(self, hand: list[int], history: dict[str, Any]) -> int:
         if len(hand) == 1:
@@ -402,16 +465,47 @@ class SimulationPlayer:
         counts: dict[int, int] = {c: 0 for c in candidates}
         my_pid = self.player_idx
 
+        # Signal 1: precompute per-opp Gaussian weights over `unseen` once per turn,
+        # using each opp's empirical mean of past plays as the kernel center.
+        opp_weights: list[list[float] | None] | None = None
+        if self.opp_weighted_sampling and unseen:
+            history_matrix = history["history_matrix"]
+            opp_pids = [pid for pid in range(len(history_matrix)) if pid != my_pid]
+            inv_2s2 = 1.0 / (2.0 * self.weight_sigma * self.weight_sigma)
+            opp_weights = []
+            for pid in opp_pids:
+                played = [c for c in history_matrix[pid] if c > 0]
+                if played:
+                    mean = sum(played) / len(played)
+                    opp_weights.append(
+                        [math.exp(-((c - mean) ** 2) * inv_2s2) for c in unseen]
+                    )
+                else:
+                    opp_weights.append(None)
+
+        use_phantom = self.opp_lookahead and self.opp_lookahead_phantom
+
         # Phase 1 (CRN warmup): one opp_hand → every candidate, paired sampling.
         for _ in range(self.min_paired_iters):
             if time.perf_counter() >= deadline:
                 break
-            opp_hands = _sample_opp_hands(self.rng, unseen, _N_OPPONENTS, rounds_left)
+            opp_hands = _sample_opp_hands(
+                self.rng, unseen, _N_OPPONENTS, rounds_left, opp_weights=opp_weights
+            )
+            # Phantom for round 1: sample once per CRN iter from `hand`, redrawn
+            # if it collides with the candidate during the per-candidate loop.
+            phantom_base = self.rng.choice(hand) if use_phantom else -1
             for c in candidates:
                 if time.perf_counter() >= deadline:
                     break
+                if use_phantom and phantom_base == c:
+                    others = [h for h in hand if h != c]
+                    phantom = self.rng.choice(others) if others else -1
+                else:
+                    phantom = phantom_base
                 totals[c] += _rollout_total_score(
-                    board, hand, c, opp_hands, my_pid, self.endgame_threshold, self.opp_lookahead
+                    board, hand, c, opp_hands, my_pid, self.endgame_threshold,
+                    self.opp_lookahead, use_phantom, phantom,
                 )
                 counts[c] += 1
 
@@ -426,9 +520,17 @@ class SimulationPlayer:
                 key=lambda c: totals[c] / counts[c]
                 - ucb_c * math.sqrt(log_total / counts[c]),
             )
-            opp_hands = _sample_opp_hands(self.rng, unseen, _N_OPPONENTS, rounds_left)
+            opp_hands = _sample_opp_hands(
+                self.rng, unseen, _N_OPPONENTS, rounds_left, opp_weights=opp_weights
+            )
+            if use_phantom:
+                others = [h for h in hand if h != chosen]
+                phantom = self.rng.choice(others) if others else -1
+            else:
+                phantom = -1
             totals[chosen] += _rollout_total_score(
-                board, hand, chosen, opp_hands, my_pid, self.endgame_threshold, self.opp_lookahead
+                board, hand, chosen, opp_hands, my_pid, self.endgame_threshold,
+                self.opp_lookahead, use_phantom, phantom,
             )
             counts[chosen] += 1
             total_pulls += 1
