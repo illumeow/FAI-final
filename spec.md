@@ -325,15 +325,15 @@ Check [`configs/`](./configs/) for examples.
 
 ### Grading Policy
 
-Performance (70 pts)
+#### Performance (70 pts)
 - Midterm Submission (15 pts)
     - Tournament with all students + 40 baselines (a weaker subset)
 - Final Submission (55 pts)
     - Tournament with all students + 55 baselines (the full set)
 
-Report (30 pts)
+#### Report (30 pts)
 
-Novelty: qualitative + quantitative, up to +5 pts, total capped at 100
+#### Novelty: qualitative + quantitative, up to +5 pts, total capped at 100
 
 ### Baselines
 
@@ -369,6 +369,13 @@ All files that were used to produce your final methods should be submitted
 - If you have intermediate files (other than best players), you need to write an additional README.md explaining how to reproduce your results
 
 Your code will be evaluated in a closed network, i.e., you cannot download models from the web.
+
+### Format
+- Please compress your player and the related files in a single .zip named with your student id in lowercase.
+- The size of the submitted .zip file should be less than 2GB.
+- Don’t hand in unnecessary pycache files.
+
+> Use `zip -r student_id.zip student_id/` in terminal to compress your files.
 
 ### Report
 
