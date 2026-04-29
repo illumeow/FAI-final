@@ -23,7 +23,7 @@
     "tournament": {
         "type": "random_partition",
         "duplication_mode": "cycle",
-        "num_games_per_player": 1500,
+        "num_games_per_player": 7000,
         "num_workers": 30
     }
 }
