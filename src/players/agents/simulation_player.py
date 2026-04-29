@@ -467,14 +467,17 @@ class SimulationPlayer:
 
         # Signal 1: precompute per-opp Gaussian weights over `unseen` once per turn,
         # using each opp's empirical mean of past plays as the kernel center.
+        # history_matrix is round-indexed ([round][player]), so transpose it.
         opp_weights: list[list[float] | None] | None = None
         if self.opp_weighted_sampling and unseen:
             history_matrix = history["history_matrix"]
-            opp_pids = [pid for pid in range(len(history_matrix)) if pid != my_pid]
+            n_players = len(history["scores"])
+            opp_pids = [pid for pid in range(n_players) if pid != my_pid]
             inv_2s2 = 1.0 / (2.0 * self.weight_sigma * self.weight_sigma)
             opp_weights = []
             for pid in opp_pids:
-                played = [c for c in history_matrix[pid] if c > 0]
+                played = [round_actions[pid] for round_actions in history_matrix
+                          if round_actions[pid] > 0]
                 if played:
                     mean = sum(played) / len(played)
                     opp_weights.append(
