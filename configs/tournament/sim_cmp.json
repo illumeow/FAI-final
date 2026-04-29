@@ -8,8 +8,8 @@
     ],
     "players": [
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "sim base"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"opp_lookahead": true}, "sim la"]
+        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "sim la"],
+        ["src.players.agents.simulation_player", "SimulationPlayer", {"opp_lookahead": false}, "sim greedy"]
     ],
     "engine": {
         "n_players": 4,

@@ -377,7 +377,7 @@ class SimulationPlayer:
         player_idx: int,
         ucb_c: float = 7.0,
         endgame_threshold: int = 4,
-        opp_lookahead: bool = False,
+        opp_lookahead: bool = True,
     ) -> None:
         self.player_idx = player_idx
         self.rng = random.Random()
