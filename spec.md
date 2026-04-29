@@ -345,12 +345,13 @@ Please refer to [README.md](./README.md) for more details.
     - 5 baselines from B1-B55 will be released after the midterm.
         - The released baselines are only a subset, so **avoid overfitting** to them.
 - Baselines may be used for training, but **cannot** be submitted directly or imported into your final submission.
+- Baselines are sorted by performance (B1 is the weakest, B55 is the strongest).
 
 ### Baselines Scoring Criteria
 
 We will use linear interpolation to convert your average total rank to your score for the final project.
-- For midterm, B5* = 60 pts, B20** = 90 pts
-- For final, B20* = 40 pts, B55** = 90 pts
+- For midterm, B5 = 60 pts, B20 = 90 pts
+- For final, B20 = 40 pts, B55 = 90 pts
 
 ## Submission Policy
 
