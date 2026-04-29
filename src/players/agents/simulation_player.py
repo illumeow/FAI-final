@@ -132,6 +132,89 @@ def _greedy_pick(hand: list[int], board: list[list[int]], row_sums: list[int]) -
     return best_card
 
 
+def _lookahead_pick(
+    hand: list[int],
+    board: list[list[int]],
+    row_sums: list[int],
+    others_cards: list[int],
+) -> int:
+    # 1-ply lookahead: each candidate is evaluated by simulating sorted placement
+    # against `others_cards` (the other opps' greedy picks; my card deliberately
+    # excluded so my candidate choice doesn't bias the opp's decision). State is
+    # tracked in flat arrays to avoid the per-candidate board.copy() cost.
+    if len(hand) == 1:
+        return hand[0]
+    if not others_cards:
+        return _greedy_pick(hand, board, row_sums)
+
+    base_last = [r[-1] for r in board]
+    base_len = [len(r) for r in board]
+    base_score = list(row_sums)
+
+    others_sorted = sorted(others_cards)
+
+    best_c = hand[0]
+    best_pen = -1
+    for c in hand:
+        last = base_last.copy()
+        rlen = base_len.copy()
+        score = base_score.copy()
+
+        # Merge c into others_sorted in ascending order.
+        oi = 0
+        n_others = len(others_sorted)
+        c_done = False
+        pen = 0
+        while oi < n_others or not c_done:
+            if not c_done and (oi >= n_others or c <= others_sorted[oi]):
+                card = c
+                is_me = True
+                c_done = True
+            else:
+                card = others_sorted[oi]
+                is_me = False
+                oi += 1
+
+            best_idx = -1
+            best_last = -1
+            for i in range(_N_ROWS):
+                li = last[i]
+                if li < card and li > best_last:
+                    best_last = li
+                    best_idx = i
+
+            if best_idx == -1:
+                ft_idx = 0
+                ft_key = (score[0], rlen[0], 0)
+                for i in range(1, _N_ROWS):
+                    k = (score[i], rlen[i], i)
+                    if k < ft_key:
+                        ft_key = k
+                        ft_idx = i
+                gained = score[ft_idx]
+                last[ft_idx] = card
+                rlen[ft_idx] = 1
+                score[ft_idx] = _CARD_SCORE[card]
+            elif rlen[best_idx] >= 5:
+                gained = score[best_idx]
+                last[best_idx] = card
+                rlen[best_idx] = 1
+                score[best_idx] = _CARD_SCORE[card]
+            else:
+                gained = 0
+                last[best_idx] = card
+                rlen[best_idx] += 1
+                score[best_idx] += _CARD_SCORE[card]
+
+            if is_me:
+                pen += gained
+
+        if best_pen == -1 or pen < best_pen:
+            best_pen = pen
+            best_c = c
+    return best_c
+
+
 def _build_unseen_pool(
     hand: list[int], history: dict[str, Any], n_cards: int = _N_CARDS
 ) -> list[int]:
@@ -171,14 +254,40 @@ def _simulate_one_round_inplace(
     my_card: int,
     opp_remaining: list[list[int]],
     my_pid: int,
+    opp_lookahead: bool = False,
 ) -> int:
-    played: list[tuple[int, int]] = [(my_card, my_pid)]
-    for i, opp_hand in enumerate(opp_remaining):
-        if not opp_hand:
-            continue
-        opp_card = _greedy_pick(opp_hand, board, row_sums)
-        opp_hand.remove(opp_card)
-        played.append((opp_card, -1000 - i))
+    if opp_lookahead:
+        n_opp = len(opp_remaining)
+        # First pass: each opp's static greedy pick. Used as the proxy for
+        # "what other opps will play" in the second pass.
+        greedy_picks: list[int] = [-1] * n_opp
+        for i, h in enumerate(opp_remaining):
+            if h:
+                greedy_picks[i] = _greedy_pick(h, board, row_sums)
+        # Second pass: each opp picks via 1-ply best response against the other
+        # opps' greedy picks. My card is excluded from their planning set.
+        final_picks: list[int] = [-1] * n_opp
+        for i, h in enumerate(opp_remaining):
+            if not h:
+                continue
+            others = [greedy_picks[j] for j in range(n_opp) if j != i and greedy_picks[j] != -1]
+            final_picks[i] = _lookahead_pick(h, board, row_sums, others)
+
+        played: list[tuple[int, int]] = [(my_card, my_pid)]
+        for i, h in enumerate(opp_remaining):
+            if not h:
+                continue
+            c = final_picks[i]
+            h.remove(c)
+            played.append((c, -1000 - i))
+    else:
+        played = [(my_card, my_pid)]
+        for i, opp_hand in enumerate(opp_remaining):
+            if not opp_hand:
+                continue
+            opp_card = _greedy_pick(opp_hand, board, row_sums)
+            opp_hand.remove(opp_card)
+            played.append((opp_card, -1000 - i))
 
     played.sort(key=lambda x: x[0])
     my_total = 0
@@ -195,6 +304,7 @@ def _endgame_best_response(
     my_remaining: list[int],
     opp_remaining: list[list[int]],
     my_pid: int,
+    opp_lookahead: bool = False,
 ) -> int:
     if not my_remaining:
         return 0
@@ -202,16 +312,16 @@ def _endgame_best_response(
         b = [row.copy() for row in board]
         rs = row_sums.copy()
         opps = [h.copy() for h in opp_remaining]
-        return _simulate_one_round_inplace(b, rs, my_remaining[0], opps, my_pid)
+        return _simulate_one_round_inplace(b, rs, my_remaining[0], opps, my_pid, opp_lookahead)
 
     best = -1
     for idx, my_card in enumerate(my_remaining):
         b = [row.copy() for row in board]
         rs = row_sums.copy()
         opps = [h.copy() for h in opp_remaining]
-        gained = _simulate_one_round_inplace(b, rs, my_card, opps, my_pid)
+        gained = _simulate_one_round_inplace(b, rs, my_card, opps, my_pid, opp_lookahead)
         sub_my = my_remaining[:idx] + my_remaining[idx + 1 :]
-        future = _endgame_best_response(b, rs, sub_my, opps, my_pid)
+        future = _endgame_best_response(b, rs, sub_my, opps, my_pid, opp_lookahead)
         total = gained + future
         if idx == 0 or total < best:
             best = total
@@ -225,6 +335,7 @@ def _rollout_total_score(
     opp_hands: list[list[int]],
     my_pid: int,
     endgame_threshold: int = 4,
+    opp_lookahead: bool = False,
 ) -> int:
     sim_board = [row.copy() for row in board]
     row_sums = _row_sums_from_board(sim_board)
@@ -234,7 +345,7 @@ def _rollout_total_score(
 
     rounds_left = len(my_hand)
     my_total = _simulate_one_round_inplace(
-        sim_board, row_sums, fixed_first_card, opp_remaining, my_pid
+        sim_board, row_sums, fixed_first_card, opp_remaining, my_pid, opp_lookahead
     )
 
     if rounds_left == 1:
@@ -242,7 +353,7 @@ def _rollout_total_score(
 
     if rounds_left <= endgame_threshold:
         my_total += _endgame_best_response(
-            sim_board, row_sums, my_remaining, opp_remaining, my_pid
+            sim_board, row_sums, my_remaining, opp_remaining, my_pid, opp_lookahead
         )
         return my_total
 
@@ -250,7 +361,7 @@ def _rollout_total_score(
         my_card = _greedy_pick(my_remaining, sim_board, row_sums)
         my_remaining.remove(my_card)
         my_total += _simulate_one_round_inplace(
-            sim_board, row_sums, my_card, opp_remaining, my_pid
+            sim_board, row_sums, my_card, opp_remaining, my_pid, opp_lookahead
         )
     return my_total
 
@@ -261,13 +372,20 @@ class SimulationPlayer:
     followed by UCB1-style allocation on the remaining budget.
     """
 
-    def __init__(self, player_idx: int, ucb_c: float = 7.0, endgame_threshold: int = 4) -> None:
+    def __init__(
+        self,
+        player_idx: int,
+        ucb_c: float = 7.0,
+        endgame_threshold: int = 4,
+        opp_lookahead: bool = False,
+    ) -> None:
         self.player_idx = player_idx
         self.rng = random.Random()
         self.time_budget_sec = 0.95
         self.min_paired_iters = 4
         self.ucb_c = ucb_c
         self.endgame_threshold = endgame_threshold
+        self.opp_lookahead = opp_lookahead
 
     def action(self, hand: list[int], history: dict[str, Any]) -> int:
         if len(hand) == 1:
@@ -293,7 +411,7 @@ class SimulationPlayer:
                 if time.perf_counter() >= deadline:
                     break
                 totals[c] += _rollout_total_score(
-                    board, hand, c, opp_hands, my_pid, self.endgame_threshold
+                    board, hand, c, opp_hands, my_pid, self.endgame_threshold, self.opp_lookahead
                 )
                 counts[c] += 1
 
@@ -310,7 +428,7 @@ class SimulationPlayer:
             )
             opp_hands = _sample_opp_hands(self.rng, unseen, _N_OPPONENTS, rounds_left)
             totals[chosen] += _rollout_total_score(
-                board, hand, chosen, opp_hands, my_pid, self.endgame_threshold
+                board, hand, chosen, opp_hands, my_pid, self.endgame_threshold, self.opp_lookahead
             )
             counts[chosen] += 1
             total_pulls += 1

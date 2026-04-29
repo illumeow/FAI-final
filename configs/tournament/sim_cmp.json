@@ -8,11 +8,8 @@
     ],
     "players": [
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"ucb_c": 3.0}, "sim c=3"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"ucb_c": 5.0}, "sim c=5"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"ucb_c": 7.0}, "sim c=7"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"ucb_c": 9.0}, "sim c=9"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"ucb_c": 11.0}, "sim c=11"]
+        ["src.players.agents.simulation_player", "SimulationPlayer", {}, "sim base"],
+        ["src.players.agents.simulation_player", "SimulationPlayer", {"opp_lookahead": true}, "sim la"]
     ],
     "engine": {
         "n_players": 4,
