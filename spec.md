@@ -12,11 +12,11 @@ Every card has "Bullheads" (🐮) on it. These are **Negative Points**.
 
 **Winner = Player with the FEWEST Bullheads!**
 
-- Normal Cards: 1pt
-- Ends in 5: 5pt
-- % 10 == 0: 10pt
-- % 11 == 0: 22pt
-- 55 (The King): 55pt
+- Normal Cards: 1
+- Ends in 5: 2
+- % 10 == 0: 3
+- % 11 == 0: 5
+- 55 (The King): 7
 
 ### Game Setup
 
