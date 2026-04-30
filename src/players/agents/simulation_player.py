@@ -137,11 +137,15 @@ def _lookahead_pick(
     board: list[list[int]],
     row_sums: list[int],
     others_cards: list[int],
+    rng: random.Random | None = None,
+    opp_softmax_temp: float = 0.0,
 ) -> int:
     # 1-ply lookahead: each candidate is evaluated by simulating sorted placement
     # against `others_cards` (the other opps' greedy picks; my card deliberately
     # excluded so my candidate choice doesn't bias the opp's decision). State is
     # tracked in flat arrays to avoid the per-candidate board.copy() cost.
+    # If opp_softmax_temp > 0 and rng is supplied, the pick is sampled from a
+    # softmax over -pen/temp instead of being a hard argmin (models a noisy opp).
     if len(hand) == 1:
         return hand[0]
     if not others_cards:
@@ -153,6 +157,8 @@ def _lookahead_pick(
 
     others_sorted = sorted(others_cards)
 
+    use_softmax = opp_softmax_temp > 0.0 and rng is not None
+    pens: list[int] = []
     best_c = hand[0]
     best_pen = -1
     for c in hand:
@@ -209,9 +215,16 @@ def _lookahead_pick(
             if is_me:
                 pen += gained
 
-        if best_pen == -1 or pen < best_pen:
+        if use_softmax:
+            pens.append(pen)
+        elif best_pen == -1 or pen < best_pen:
             best_pen = pen
             best_c = c
+
+    if use_softmax:
+        min_pen = min(pens)
+        weights = [math.exp(-(p - min_pen) / opp_softmax_temp) for p in pens]
+        return rng.choices(hand, weights=weights, k=1)[0]
     return best_c
 
 
@@ -256,6 +269,8 @@ def _simulate_one_round_inplace(
     my_pid: int,
     opp_lookahead: bool = False,
     phantom_my_card: int = -1,
+    rng: random.Random | None = None,
+    opp_softmax_temp: float = 0.0,
 ) -> int:
     if opp_lookahead:
         n_opp = len(opp_remaining)
@@ -275,7 +290,7 @@ def _simulate_one_round_inplace(
             others = [greedy_picks[j] for j in range(n_opp) if j != i and greedy_picks[j] != -1]
             if phantom_my_card != -1:
                 others.append(phantom_my_card)
-            final_picks[i] = _lookahead_pick(h, board, row_sums, others)
+            final_picks[i] = _lookahead_pick(h, board, row_sums, others, rng, opp_softmax_temp)
 
         played: list[tuple[int, int]] = [(my_card, my_pid)]
         for i, h in enumerate(opp_remaining):
@@ -310,6 +325,8 @@ def _endgame_best_response(
     my_pid: int,
     opp_lookahead: bool = False,
     use_phantom: bool = False,
+    rng: random.Random | None = None,
+    opp_softmax_temp: float = 0.0,
 ) -> int:
     if not my_remaining:
         return 0
@@ -319,7 +336,9 @@ def _endgame_best_response(
         opps = [h.copy() for h in opp_remaining]
         # Single card left: opps could see it without bias (no candidate to compare against).
         phantom = my_remaining[0] if use_phantom else -1
-        return _simulate_one_round_inplace(b, rs, my_remaining[0], opps, my_pid, opp_lookahead, phantom)
+        return _simulate_one_round_inplace(
+            b, rs, my_remaining[0], opps, my_pid, opp_lookahead, phantom, rng, opp_softmax_temp
+        )
 
     best = -1
     for idx, my_card in enumerate(my_remaining):
@@ -332,9 +351,13 @@ def _endgame_best_response(
             phantom = my_remaining[(idx + 1) % len(my_remaining)]
         else:
             phantom = -1
-        gained = _simulate_one_round_inplace(b, rs, my_card, opps, my_pid, opp_lookahead, phantom)
+        gained = _simulate_one_round_inplace(
+            b, rs, my_card, opps, my_pid, opp_lookahead, phantom, rng, opp_softmax_temp
+        )
         sub_my = my_remaining[:idx] + my_remaining[idx + 1 :]
-        future = _endgame_best_response(b, rs, sub_my, opps, my_pid, opp_lookahead, use_phantom)
+        future = _endgame_best_response(
+            b, rs, sub_my, opps, my_pid, opp_lookahead, use_phantom, rng, opp_softmax_temp
+        )
         total = gained + future
         if idx == 0 or total < best:
             best = total
@@ -351,6 +374,8 @@ def _rollout_total_score(
     opp_lookahead: bool = False,
     use_phantom: bool = False,
     phantom_round1: int = -1,
+    rng: random.Random | None = None,
+    opp_softmax_temp: float = 0.0,
 ) -> int:
     sim_board = [row.copy() for row in board]
     row_sums = _row_sums_from_board(sim_board)
@@ -361,7 +386,7 @@ def _rollout_total_score(
     rounds_left = len(my_hand)
     my_total = _simulate_one_round_inplace(
         sim_board, row_sums, fixed_first_card, opp_remaining, my_pid, opp_lookahead,
-        phantom_round1 if use_phantom else -1,
+        phantom_round1 if use_phantom else -1, rng, opp_softmax_temp,
     )
 
     if rounds_left == 1:
@@ -369,7 +394,8 @@ def _rollout_total_score(
 
     if rounds_left <= endgame_threshold:
         my_total += _endgame_best_response(
-            sim_board, row_sums, my_remaining, opp_remaining, my_pid, opp_lookahead, use_phantom
+            sim_board, row_sums, my_remaining, opp_remaining, my_pid, opp_lookahead, use_phantom,
+            rng, opp_softmax_temp,
         )
         return my_total
 
@@ -380,7 +406,7 @@ def _rollout_total_score(
         # so opps seeing my actual card here doesn't bias the comparison.
         my_total += _simulate_one_round_inplace(
             sim_board, row_sums, my_card, opp_remaining, my_pid, opp_lookahead,
-            my_card if use_phantom else -1,
+            my_card if use_phantom else -1, rng, opp_softmax_temp,
         )
     return my_total
 
@@ -398,6 +424,7 @@ class SimulationPlayer:
         endgame_threshold: int = 4,
         opp_lookahead: bool = True,
         opp_lookahead_phantom: bool = False,
+        opp_softmax_temp: float = 0.0,
     ) -> None:
         self.player_idx = player_idx
         self.rng = random.Random()
@@ -407,6 +434,9 @@ class SimulationPlayer:
         self.endgame_threshold = endgame_threshold
         self.opp_lookahead = opp_lookahead
         self.opp_lookahead_phantom = opp_lookahead_phantom
+        # opp_softmax_temp > 0 makes opp 1-ply BR a softmax sample over -pen/T
+        # instead of hard argmin — models a noisy opp policy. 0 = current behavior.
+        self.opp_softmax_temp = opp_softmax_temp
 
     def action(self, hand: list[int], history: dict[str, Any]) -> int:
         if len(hand) == 1:
@@ -425,6 +455,11 @@ class SimulationPlayer:
 
         use_phantom = self.opp_lookahead and self.opp_lookahead_phantom
 
+        opp_softmax_temp = self.opp_softmax_temp
+        # When softmax is on, rollouts consume rng inside; restoring rng state
+        # before each candidate keeps CRN intact across the candidate loop.
+        crn_save = opp_softmax_temp > 0.0
+
         # Phase 1 (CRN warmup): one opp_hand → every candidate, paired sampling.
         for _ in range(self.min_paired_iters):
             if time.perf_counter() >= deadline:
@@ -433,9 +468,12 @@ class SimulationPlayer:
             # Phantom for round 1: sample once per CRN iter from `hand`, redrawn
             # if it collides with the candidate during the per-candidate loop.
             phantom_base = self.rng.choice(hand) if use_phantom else -1
+            crn_state = self.rng.getstate() if crn_save else None
             for c in candidates:
                 if time.perf_counter() >= deadline:
                     break
+                if crn_state is not None:
+                    self.rng.setstate(crn_state)
                 if use_phantom and phantom_base == c:
                     others = [h for h in hand if h != c]
                     phantom = self.rng.choice(others) if others else -1
@@ -444,6 +482,7 @@ class SimulationPlayer:
                 totals[c] += _rollout_total_score(
                     board, hand, c, opp_hands, my_pid, self.endgame_threshold,
                     self.opp_lookahead, use_phantom, phantom,
+                    self.rng, opp_softmax_temp,
                 )
                 counts[c] += 1
 
@@ -467,6 +506,7 @@ class SimulationPlayer:
             totals[chosen] += _rollout_total_score(
                 board, hand, chosen, opp_hands, my_pid, self.endgame_threshold,
                 self.opp_lookahead, use_phantom, phantom,
+                self.rng, opp_softmax_temp,
             )
             counts[chosen] += 1
             total_pulls += 1
