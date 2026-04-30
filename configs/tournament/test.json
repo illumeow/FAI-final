@@ -1,11 +1,4 @@
 {
-    "baselines": [
-        ["src.players.TA.public_baselines1", "Baseline1", {}, "B1"],
-        ["src.players.TA.public_baselines1", "Baseline2", {}, "B2"],
-        ["src.players.TA.public_baselines1", "Baseline3", {}, "B3"],
-        ["src.players.TA.public_baselines1", "Baseline4", {}, "B4"],
-        ["src.players.TA.public_baselines1", "Baseline5", {}, "B5"]
-    ],
     "players": [
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {"rank_objective": false}, "cfr+ pen"],
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {"rank_objective": false, "opp_lookahead_phantom": true}, "cfr+ pen+ph"],
@@ -26,7 +19,7 @@
     "tournament": {
         "type": "random_partition",
         "duplication_mode": "cycle",
-        "num_games_per_player": 5000,
+        "num_games_per_player": 1000,
         "num_workers": 30
     }
 }
