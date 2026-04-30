@@ -256,9 +256,9 @@ def _simulate_one_round_inplace(
     my_pid: int,
     opp_lookahead: bool = False,
     phantom_my_card: int = -1,
-) -> int:
+) -> tuple[int, list[int]]:
+    n_opp = len(opp_remaining)
     if opp_lookahead:
-        n_opp = len(opp_remaining)
         # First pass: each opp's static greedy pick. Used as the proxy for
         # "what other opps will play" in the second pass.
         greedy_picks: list[int] = [-1] * n_opp
@@ -295,11 +295,14 @@ def _simulate_one_round_inplace(
 
     played.sort(key=lambda x: x[0])
     my_total = 0
+    opp_totals = [0] * n_opp
     for card, pid in played:
         gained = _place_card(board, row_sums, card)
         if pid == my_pid:
             my_total += gained
-    return my_total
+        else:
+            opp_totals[-pid - 1000] += gained
+    return my_total, opp_totals
 
 
 def _endgame_best_response(
@@ -310,9 +313,10 @@ def _endgame_best_response(
     my_pid: int,
     opp_lookahead: bool = False,
     use_phantom: bool = False,
-) -> int:
+) -> tuple[int, list[int]]:
+    n_opp = len(opp_remaining)
     if not my_remaining:
-        return 0
+        return 0, [0] * n_opp
     if len(my_remaining) == 1:
         b = [row.copy() for row in board]
         rs = row_sums.copy()
@@ -321,7 +325,8 @@ def _endgame_best_response(
         phantom = my_remaining[0] if use_phantom else -1
         return _simulate_one_round_inplace(b, rs, my_remaining[0], opps, my_pid, opp_lookahead, phantom)
 
-    best = -1
+    best_my = -1
+    best_opps: list[int] = [0] * n_opp
     for idx, my_card in enumerate(my_remaining):
         b = [row.copy() for row in board]
         rs = row_sums.copy()
@@ -332,13 +337,14 @@ def _endgame_best_response(
             phantom = my_remaining[(idx + 1) % len(my_remaining)]
         else:
             phantom = -1
-        gained = _simulate_one_round_inplace(b, rs, my_card, opps, my_pid, opp_lookahead, phantom)
+        gained_my, gained_opps = _simulate_one_round_inplace(b, rs, my_card, opps, my_pid, opp_lookahead, phantom)
         sub_my = my_remaining[:idx] + my_remaining[idx + 1 :]
-        future = _endgame_best_response(b, rs, sub_my, opps, my_pid, opp_lookahead, use_phantom)
-        total = gained + future
-        if idx == 0 or total < best:
-            best = total
-    return best
+        future_my, future_opps = _endgame_best_response(b, rs, sub_my, opps, my_pid, opp_lookahead, use_phantom)
+        total_my = gained_my + future_my
+        if idx == 0 or total_my < best_my:
+            best_my = total_my
+            best_opps = [g + f for g, f in zip(gained_opps, future_opps)]
+    return best_my, best_opps
 
 
 def _rollout_total_score(
@@ -351,7 +357,7 @@ def _rollout_total_score(
     opp_lookahead: bool = False,
     use_phantom: bool = False,
     phantom_round1: int = -1,
-) -> int:
+) -> tuple[int, list[int]]:
     sim_board = [row.copy() for row in board]
     row_sums = _row_sums_from_board(sim_board)
     my_remaining = my_hand.copy()
@@ -359,46 +365,62 @@ def _rollout_total_score(
     opp_remaining = [h.copy() for h in opp_hands]
 
     rounds_left = len(my_hand)
-    my_total = _simulate_one_round_inplace(
+    my_total, opp_totals = _simulate_one_round_inplace(
         sim_board, row_sums, fixed_first_card, opp_remaining, my_pid, opp_lookahead,
         phantom_round1 if use_phantom else -1,
     )
 
     if rounds_left == 1:
-        return my_total
+        return my_total, opp_totals
 
     if rounds_left <= endgame_threshold:
-        my_total += _endgame_best_response(
+        eg_my, eg_opps = _endgame_best_response(
             sim_board, row_sums, my_remaining, opp_remaining, my_pid, opp_lookahead, use_phantom
         )
-        return my_total
+        my_total += eg_my
+        opp_totals = [a + b for a, b in zip(opp_totals, eg_opps)]
+        return my_total, opp_totals
 
     for _ in range(rounds_left - 1):
         my_card = _greedy_pick(my_remaining, sim_board, row_sums)
         my_remaining.remove(my_card)
         # Rounds 2+ are determined by greedy regardless of fixed_first_card,
         # so opps seeing my actual card here doesn't bias the comparison.
-        my_total += _simulate_one_round_inplace(
+        rd_my, rd_opps = _simulate_one_round_inplace(
             sim_board, row_sums, my_card, opp_remaining, my_pid, opp_lookahead,
             my_card if use_phantom else -1,
         )
-    return my_total
+        my_total += rd_my
+        opp_totals = [a + b for a, b in zip(opp_totals, rd_opps)]
+    return my_total, opp_totals
 
 
-class SimulationPlayer:
+def _rank_from_totals(my_total: int, opp_totals: list[int]) -> float:
+    # Lower-is-better rank in [1, 4]: 1 = strictly best, 4 = strictly worst,
+    # half-integers for ties (matches engine's fractional rank convention).
+    better = sum(1 for o in opp_totals if o < my_total)
+    same = sum(1 for o in opp_totals if o == my_total)
+    return 1.0 + better + 0.5 * same
+
+
+class SimulationPlayerRank:
     """
-    Time-budgeted determinized Monte Carlo player using paired (CRN) warmup
-    followed by UCB1-style allocation on the remaining budget.
+    Rank-objective variant of SimulationPlayer: action selection minimizes
+    E[rank within rollout] (1.0–4.0, lower is better) instead of E[score].
+    Endgame BR still optimizes my own penalty as a tractable proxy; ranks are
+    computed at the rollout's leaf from the full per-player penalty totals.
     """
 
     def __init__(
         self,
         player_idx: int,
-        ucb_c: float = 7.0,
+        ucb_c: float = 1.5,
         endgame_threshold: int = 4,
         opp_lookahead: bool = True,
         opp_lookahead_phantom: bool = False,
     ) -> None:
+        # ucb_c=1.5 because rewards live in [1, 4] (rank), not score-scale.
+        # The original sim used 7.0 calibrated for penalty-scale (~0–50/game).
         self.player_idx = player_idx
         self.rng = random.Random()
         self.time_budget_sec = 0.95
@@ -441,13 +463,14 @@ class SimulationPlayer:
                     phantom = self.rng.choice(others) if others else -1
                 else:
                     phantom = phantom_base
-                totals[c] += _rollout_total_score(
+                my_total, opp_totals = _rollout_total_score(
                     board, hand, c, opp_hands, my_pid, self.endgame_threshold,
                     self.opp_lookahead, use_phantom, phantom,
                 )
+                totals[c] += _rank_from_totals(my_total, opp_totals)
                 counts[c] += 1
 
-        # Phase 2 (UCB1): minimize penalty → pick the lowest LCB candidate.
+        # Phase 2 (UCB1): minimize E[rank] → pick the lowest LCB candidate.
         sampled = [c for c in candidates if counts[c] > 0]
         total_pulls = sum(counts[c] for c in sampled)
         ucb_c = self.ucb_c
@@ -464,10 +487,11 @@ class SimulationPlayer:
                 phantom = self.rng.choice(others) if others else -1
             else:
                 phantom = -1
-            totals[chosen] += _rollout_total_score(
+            my_total, opp_totals = _rollout_total_score(
                 board, hand, chosen, opp_hands, my_pid, self.endgame_threshold,
                 self.opp_lookahead, use_phantom, phantom,
             )
+            totals[chosen] += _rank_from_totals(my_total, opp_totals)
             counts[chosen] += 1
             total_pulls += 1
 

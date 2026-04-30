@@ -9,9 +9,9 @@
     "players": [
         ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
         ["src.players.agents.simulation_player", "SimulationPlayer", {}, "sim la"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"opp_weighted_sampling": true}, "sim la+s1"],
         ["src.players.agents.simulation_player", "SimulationPlayer", {"opp_lookahead_phantom": true}, "sim la+ph"],
-        ["src.players.agents.simulation_player", "SimulationPlayer", {"opp_weighted_sampling": true, "opp_lookahead_phantom": true}, "sim la+s1+ph"]
+        ["src.players.agents.simulation_player_rank", "SimulationPlayerRank", {}, "sim rank"],
+        ["src.players.agents.simulation_player_rank", "SimulationPlayerRank", {"opp_lookahead_phantom": true}, "sim rank+ph"]
     ],
     "engine": {
         "n_players": 4,
