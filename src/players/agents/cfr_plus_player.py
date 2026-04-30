@@ -1,4 +1,3 @@
-import math
 import random
 import time
 from collections.abc import Iterator
@@ -204,91 +203,27 @@ def _build_unseen_pool(
     return [c for c in range(1, n_cards + 1) if c not in known]
 
 
-def _build_opp_weights(
-    history: dict[str, Any],
-    unseen: list[int],
-    my_pid: int,
-    weight_sigma: float,
-) -> list[list[float] | None] | None:
-    # Per-opp Gaussian weights over `unseen`, centered on each opp's empirical
-    # mean of past plays. None entries → uniform fallback for that opp.
-    if weight_sigma <= 0.0 or not unseen:
-        return None
-    history_matrix = history["history_matrix"]
-    n_players = len(history["scores"])
-    opp_pids = [pid for pid in range(n_players) if pid != my_pid]
-    inv_2s2 = 1.0 / (2.0 * weight_sigma * weight_sigma)
-    weights: list[list[float] | None] = []
-    for pid in opp_pids:
-        played = [round_actions[pid] for round_actions in history_matrix
-                  if round_actions[pid] > 0]
-        if played:
-            mean = sum(played) / len(played)
-            weights.append([math.exp(-((c - mean) ** 2) * inv_2s2) for c in unseen])
-        else:
-            weights.append(None)
-    return weights
-
-
 def _sample_opp_hands(
     rng: random.Random,
     unseen: list[int],
     n_opponents: int,
     rounds_left: int,
     n_cards: int = _N_CARDS,
-    opp_weights: list[list[float] | None] | None = None,
 ) -> list[list[int]]:
     needed = n_opponents * rounds_left
     if needed == 0:
         return []
-    if opp_weights is None:
-        if len(unseen) >= needed:
-            sampled = rng.sample(unseen, needed)
-        elif unseen:
-            sampled = [rng.choice(unseen) for _ in range(needed)]
-        else:
-            sampled = [rng.randint(1, n_cards) for _ in range(needed)]
-        hands: list[list[int]] = []
-        for i in range(n_opponents):
-            h = sampled[i * rounds_left : (i + 1) * rounds_left]
-            h.sort()
-            hands.append(h)
-        return hands
-
-    pool = list(unseen)
-    weights_per_opp = [list(w) if w is not None else None for w in opp_weights]
-    hands = []
+    if len(unseen) >= needed:
+        sampled = rng.sample(unseen, needed)
+    elif unseen:
+        sampled = [rng.choice(unseen) for _ in range(needed)]
+    else:
+        sampled = [rng.randint(1, n_cards) for _ in range(needed)]
+    hands: list[list[int]] = []
     for i in range(n_opponents):
-        w = weights_per_opp[i]
-        hand: list[int] = []
-        if w is None or not pool:
-            if len(pool) >= rounds_left:
-                hand = rng.sample(pool, rounds_left)
-                for c in hand:
-                    idx = pool.index(c)
-                    pool.pop(idx)
-                    for ow in weights_per_opp:
-                        if ow is not None:
-                            ow.pop(idx)
-            elif pool:
-                hand = [rng.choice(pool) for _ in range(rounds_left)]
-            else:
-                hand = [rng.randint(1, n_cards) for _ in range(rounds_left)]
-            hand.sort()
-            hands.append(hand)
-            continue
-
-        for _ in range(min(rounds_left, len(pool))):
-            idx = rng.choices(range(len(pool)), weights=w, k=1)[0]
-            hand.append(pool[idx])
-            pool.pop(idx)
-            for ow in weights_per_opp:
-                if ow is not None:
-                    ow.pop(idx)
-        while len(hand) < rounds_left:
-            hand.append(rng.randint(1, n_cards))
-        hand.sort()
-        hands.append(hand)
+        h = sampled[i * rounds_left : (i + 1) * rounds_left]
+        h.sort()
+        hands.append(h)
     return hands
 
 
@@ -300,9 +235,12 @@ def _simulate_one_round_inplace(
     my_pid: int,
     opp_lookahead: bool = False,
     phantom_my_card: int = -1,
-) -> int:
+) -> tuple[int, list[int]]:
+    # Returns (my_pen_this_round, opp_pens_this_round). opp_pens_this_round[i]
+    # corresponds to opp_remaining[i]; caller maps the position back to a real
+    # player_idx via its opp_pids list.
+    n_opp = len(opp_remaining)
     if opp_lookahead:
-        n_opp = len(opp_remaining)
         # First pass: each opp's static greedy pick — proxy for "what other
         # opps will play" in the second pass.
         greedy_picks: list[int] = [-1] * n_opp
@@ -340,11 +278,15 @@ def _simulate_one_round_inplace(
 
     played.sort(key=lambda x: x[0])
     my_total = 0
+    opp_pens = [0] * n_opp
     for card, pid in played:
         gained = _place_card(board, row_sums, card)
         if pid == my_pid:
             my_total += gained
-    return my_total
+        else:
+            # Sentinel encoding: pid == -1000 - i where i is the opp's index.
+            opp_pens[-1000 - pid] += gained
+    return my_total, opp_pens
 
 
 def _endgame_best_response(
@@ -355,9 +297,13 @@ def _endgame_best_response(
     my_pid: int,
     opp_lookahead: bool = False,
     use_phantom: bool = False,
-) -> int:
+) -> tuple[int, list[int]]:
+    # Picks my action ordering to minimize my total pen and reports the opp
+    # pens accumulated along that best path. Note: this BR is pen-aware, not
+    # rank-aware — see CFRPlusPlayer.rank_objective notes for the trade-off.
+    n_opp = len(opp_remaining)
     if not my_remaining:
-        return 0
+        return 0, [0] * n_opp
     if len(my_remaining) == 1:
         b = [row.copy() for row in board]
         rs = row_sums.copy()
@@ -365,7 +311,8 @@ def _endgame_best_response(
         phantom = my_remaining[0] if use_phantom else -1
         return _simulate_one_round_inplace(b, rs, my_remaining[0], opps, my_pid, opp_lookahead, phantom)
 
-    best = -1
+    best_my = -1
+    best_opp_pens: list[int] = [0] * n_opp
     for idx, my_card in enumerate(my_remaining):
         b = [row.copy() for row in board]
         rs = row_sums.copy()
@@ -373,16 +320,22 @@ def _endgame_best_response(
         # Phantom = a sibling card from my_remaining, so candidates are
         # evaluated against the same opp policy.
         phantom = my_remaining[(idx + 1) % len(my_remaining)] if use_phantom else -1
-        gained = _simulate_one_round_inplace(b, rs, my_card, opps, my_pid, opp_lookahead, phantom)
+        my_round, opp_round = _simulate_one_round_inplace(
+            b, rs, my_card, opps, my_pid, opp_lookahead, phantom
+        )
         sub_my = my_remaining[:idx] + my_remaining[idx + 1 :]
-        future = _endgame_best_response(b, rs, sub_my, opps, my_pid, opp_lookahead, use_phantom)
-        total = gained + future
-        if idx == 0 or total < best:
-            best = total
-    return best
+        my_future, opp_future = _endgame_best_response(
+            b, rs, sub_my, opps, my_pid, opp_lookahead, use_phantom
+        )
+        my_total = my_round + my_future
+        opp_total = [opp_round[i] + opp_future[i] for i in range(n_opp)]
+        if best_my == -1 or my_total < best_my:
+            best_my = my_total
+            best_opp_pens = opp_total
+    return best_my, best_opp_pens
 
 
-def _rollout_total_score(
+def _rollout_outcome(
     board: list[list[int]],
     my_hand: list[int],
     fixed_first_card: int,
@@ -392,38 +345,46 @@ def _rollout_total_score(
     opp_lookahead: bool = False,
     use_phantom: bool = False,
     phantom_round1: int = -1,
-) -> int:
+) -> tuple[int, list[int]]:
+    # Returns (my_total_pen, opp_total_pens) over the entire rollout.
     sim_board = [row.copy() for row in board]
     rs = _row_sums_from_board(sim_board)
     my_remaining = my_hand.copy()
     my_remaining.remove(fixed_first_card)
     opp_remaining = [h.copy() for h in opp_hands]
+    n_opp = len(opp_remaining)
 
     rounds_left = len(my_hand)
-    my_total = _simulate_one_round_inplace(
+    my_total, opp_totals = _simulate_one_round_inplace(
         sim_board, rs, fixed_first_card, opp_remaining, my_pid, opp_lookahead,
         phantom_round1 if use_phantom else -1,
     )
 
     if rounds_left == 1:
-        return my_total
+        return my_total, opp_totals
 
     if rounds_left <= endgame_threshold:
-        my_total += _endgame_best_response(
+        my_eg, opp_eg = _endgame_best_response(
             sim_board, rs, my_remaining, opp_remaining, my_pid, opp_lookahead, use_phantom
         )
-        return my_total
+        my_total += my_eg
+        for i in range(n_opp):
+            opp_totals[i] += opp_eg[i]
+        return my_total, opp_totals
 
     for _ in range(rounds_left - 1):
         my_card = _greedy_pick(my_remaining, sim_board, rs)
         my_remaining.remove(my_card)
         # Rounds 2+ are determined by greedy regardless of fixed_first_card,
         # so opps seeing my actual card here doesn't bias the comparison.
-        my_total += _simulate_one_round_inplace(
+        my_round, opp_round = _simulate_one_round_inplace(
             sim_board, rs, my_card, opp_remaining, my_pid, opp_lookahead,
             my_card if use_phantom else -1,
         )
-    return my_total
+        my_total += my_round
+        for i in range(n_opp):
+            opp_totals[i] += opp_round[i]
+    return my_total, opp_totals
 
 
 def _count_hand_assignments(unseen_len: int, n_opponents: int, rounds_left: int) -> int:
@@ -467,6 +428,22 @@ def _strategy_from_regret_plus(
     return {a: max(0.0, regrets[a]) / denom for a in actions}
 
 
+def _my_rank(all_pens: list[int], me_idx: int) -> float:
+    # Engine's fractional-rank formula (lower = better). Matches
+    # tournament_runner.py's per-game ranking under ties: a group of k tied
+    # players sharing positions p..p+k-1 each gets the average rank
+    # (p + p+k-1) / 2 = better + 1 + (same-1)/2.
+    my_pen = all_pens[me_idx]
+    better = 0
+    same = 0
+    for p in all_pens:
+        if p < my_pen:
+            better += 1
+        elif p == my_pen:
+            same += 1
+    return (2 * better + same + 1) / 2.0
+
+
 class CFRPlusPlayer:
     """
     CFR+ regret-matching wrapped around determinized monte-carlo evaluation:
@@ -475,20 +452,26 @@ class CFRPlusPlayer:
         - Chance-sampled opp hands; common random numbers across candidates.
         - 1-ply lookahead opponents (toggleable) with phantom-card guard
           against my-card information leakage.
-        - Optional Gaussian-weighted opp hand priors keyed on past plays.
         - Within-rollout endgame best-response over my remaining cards.
         - Exact endgame solver (full opp-hand enumeration) for small horizons.
         - Adaptive time guard from running iter cost.
+
+    Loss objective (regret target): rank within the matchup (the grader's
+    metric), not raw penalty. The regret loop and the exact-endgame averager
+    both consume `rank ** rank_alpha` as the per-rollout loss. Internal
+    endgame BR over my remaining cards is still pen-minimizing — switching
+    that to rank-aware would require carrying running per-player pens through
+    the recursion; left as a follow-up if benchmarks justify it.
     """
 
     def __init__(
         self,
         player_idx: int,
         opp_lookahead: bool = True,
-        opp_weighted_sampling: bool = False,
         opp_lookahead_phantom: bool = False,
-        weight_sigma: float = 20.0,
         endgame_threshold: int = 4,
+        rank_objective: bool = True,
+        rank_alpha: float = 1.0,
     ) -> None:
         self.player_idx = player_idx
         self.rng = random.Random()
@@ -506,10 +489,10 @@ class CFRPlusPlayer:
         self.regret_decay = 1.0
 
         self.opp_lookahead = opp_lookahead
-        self.opp_weighted_sampling = opp_weighted_sampling
         self.opp_lookahead_phantom = opp_lookahead_phantom
-        self.weight_sigma = weight_sigma
         self.endgame_threshold = endgame_threshold
+        self.rank_objective = rank_objective
+        self.rank_alpha = rank_alpha
 
     def candidate_subset(
         self, hand: list[int], board: list[list[int]], row_sums: list[int]
@@ -547,6 +530,23 @@ class CFRPlusPlayer:
 
         return selected
 
+    def _loss_from_outcome(
+        self,
+        my_pen_rollout: int,
+        opp_pens_rollout: list[int],
+        my_starting_pen: int,
+        opp_starting_pens: list[int],
+    ) -> float:
+        if not self.rank_objective:
+            return float(my_pen_rollout)
+        my_final = my_starting_pen + my_pen_rollout
+        all_pens = [my_final] + [
+            opp_starting_pens[i] + opp_pens_rollout[i]
+            for i in range(len(opp_pens_rollout))
+        ]
+        rank = _my_rank(all_pens, 0)
+        return rank if self.rank_alpha == 1.0 else rank ** self.rank_alpha
+
     def exact_endgame_expected_loss(
         self,
         board: list[list[int]],
@@ -558,21 +558,20 @@ class CFRPlusPlayer:
         assignment_count: int,
         use_phantom: bool,
         phantom_round1: int,
+        my_starting_pen: int,
+        opp_starting_pens: list[int],
     ) -> float:
         total_loss = 0.0
         for opp_hands in _iter_hand_assignments(unseen, n_opponents, rounds_left):
-            total_loss += float(
-                _rollout_total_score(
-                    board,
-                    hand,
-                    first_card,
-                    opp_hands,
-                    self.player_idx,
-                    endgame_threshold=self.endgame_threshold,
-                    opp_lookahead=self.opp_lookahead,
-                    use_phantom=use_phantom,
-                    phantom_round1=phantom_round1,
-                )
+            my_pen, opp_pens = _rollout_outcome(
+                board, hand, first_card, opp_hands, self.player_idx,
+                endgame_threshold=self.endgame_threshold,
+                opp_lookahead=self.opp_lookahead,
+                use_phantom=use_phantom,
+                phantom_round1=phantom_round1,
+            )
+            total_loss += self._loss_from_outcome(
+                my_pen, opp_pens, my_starting_pen, opp_starting_pens
             )
         return total_loss / float(assignment_count)
 
@@ -587,20 +586,19 @@ class CFRPlusPlayer:
 
         board = history["board"]
         row_sums = _row_sums_from_board(board)
-        n_opponents = max(0, len(history["scores"]) - 1)
+        scores = history["scores"]
+        n_players = len(scores)
+        n_opponents = max(0, n_players - 1)
         unseen = _build_unseen_pool(hand, history)
         rounds_left = len(hand)
         my_pid = self.player_idx
+        my_starting_pen = scores[my_pid]
+        opp_starting_pens = [scores[pid] for pid in range(n_players) if pid != my_pid]
 
         actions = self.candidate_subset(hand, board, row_sums)
         if len(actions) == 1:
             return actions[0]
 
-        opp_weights = (
-            _build_opp_weights(history, unseen, my_pid, self.weight_sigma)
-            if self.opp_weighted_sampling
-            else None
-        )
         use_phantom = self.opp_lookahead and self.opp_lookahead_phantom
 
         use_exact_endgame = (
@@ -619,6 +617,7 @@ class CFRPlusPlayer:
                 exact_losses[action] = self.exact_endgame_expected_loss(
                     board, hand, action, unseen, n_opponents, rounds_left,
                     assignment_count, use_phantom, phantom,
+                    my_starting_pen, opp_starting_pens,
                 )
             return min(
                 actions,
@@ -638,9 +637,7 @@ class CFRPlusPlayer:
             iter_start = time.perf_counter()
 
             strategy = _strategy_from_regret_plus(regrets, actions)
-            opp_hands = _sample_opp_hands(
-                self.rng, unseen, n_opponents, rounds_left, opp_weights=opp_weights
-            )
+            opp_hands = _sample_opp_hands(self.rng, unseen, n_opponents, rounds_left)
             phantom_base = self.rng.choice(hand) if use_phantom else -1
 
             utilities: dict[int, float] = {}
@@ -650,12 +647,15 @@ class CFRPlusPlayer:
                     phantom = self.rng.choice(others) if others else -1
                 else:
                     phantom = phantom_base
-                loss = _rollout_total_score(
+                my_pen, opp_pens = _rollout_outcome(
                     board, hand, action, opp_hands, my_pid,
                     endgame_threshold=self.endgame_threshold,
                     opp_lookahead=self.opp_lookahead,
                     use_phantom=use_phantom,
                     phantom_round1=phantom,
+                )
+                loss = self._loss_from_outcome(
+                    my_pen, opp_pens, my_starting_pen, opp_starting_pens
                 )
                 util = -float(loss)
                 utilities[action] = util
