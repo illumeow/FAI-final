@@ -7,7 +7,10 @@
         ["src.players.TA.public_baselines1", "Baseline5", {}, "B5"]
     ],
     "players": [
-        ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+"],
+        ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {"rank_objective": false}, "cfr+ pen"],
+        ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {"rank_objective": false, "opp_lookahead_phantom": true}, "cfr+ pen+ph"],
+        ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {}, "cfr+ rank"],
+        ["src.players.agents.cfr_plus_player", "CFRPlusPlayer", {"opp_lookahead_phantom": true}, "cfr+ rank+ph"],
         ["src.players.agents.simulation_player", "SimulationPlayer", {}, "sim la"],
         ["src.players.agents.simulation_player", "SimulationPlayer", {"opp_lookahead_phantom": true}, "sim la+ph"],
         ["src.players.agents.simulation_player_rank", "SimulationPlayerRank", {}, "sim rank"],
